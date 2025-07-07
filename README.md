@@ -1,8 +1,10 @@
 # <div align="center">Jcorp Nomad</div>
 
-<div align="center">
 
-![CoverImg](https://via.placeholder.com/600x300?text=Jcorp+Nomad+Offline+Media+Server)
+<div align="center">
+  <img src="docs/Nomad Technical Diagram.png" alt="Jcorp Nomad Offline Media Server" width="800">
+</div>
+
 
 **A portable, offline media server powered by the ESP32-S3 In a Thumbdrive form factor.**  
 Stream movies, music, books, and shows anywhere — no internet required.
