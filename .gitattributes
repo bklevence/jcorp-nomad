@@ -1,1 +1,2 @@
-"firmware/Totally not the library files + versions/**" linguist-vendored
+"/firmware/Totally not the library files + versions/**" linguist-vendored
+*.ino linguist-language=C++
