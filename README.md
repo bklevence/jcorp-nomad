@@ -149,6 +149,25 @@ Topics covered include:
 
 ---
 
+## Future Plans
+
+These are features I'd like to explore in future updates. If you'd like to contribute, feel free to fork the repo or open a pull request!
+
+
+### Offline Maps with GPS Support
+Inspired by [Backcountry Beacon](https://www.instructables.com/USB-Powered-Offline-Map-Server/), the goal is to serve cached map tiles and display the live GPS position from the user's phone or connected device — entirely offline.
+
+### HTML5 Games
+Similar to [Gams Offline](https://github.com/Gams-Offline/Gams), I plan to embed simple HTML5 games that work in-browser. Great for long trips or when users want a break from videos and music.
+
+### Audiobook-Friendly Mode
+Improve playback for long-form audio by adding bookmarks, chapter display, and smart pause/resume. Intended for better audiobook handling in the Music section.
+
+### File Upload Over USB
+Enable USB mass storage or dual-mode operation to allow users to drag and drop files directly to the SD card without removing it. This may require dynamic switching between USB and Wi-Fi server modes, or dual-core task handling.
+
+---
+
 ## Build Guide on Instructables
 
 Looking for a step-by-step tutorial?  
