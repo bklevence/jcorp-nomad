@@ -4,7 +4,7 @@
 
 ![CoverImg](https://via.placeholder.com/600x300?text=Jcorp+Nomad+Offline+Media+Server)
 
-**A portable, offline media server powered by the ESP32-S3.**  
+**A portable, offline media server powered by the ESP32-S3 In a Thumbdrive form factor.**  
 Stream movies, music, books, and shows anywhere — no internet required.
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)  
