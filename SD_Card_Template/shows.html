@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Jcorp Nomad Media Server - Shows">
+    <title>Shows - Jcorp Nomad Media Server</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 2em;
+            border-bottom: 3px solid #0056b3;
+        }
+        .content {
+            padding: 20px;
+            text-align: center;
+        }
+        .cover-container {
+            cursor: pointer;
+            text-align: center;
+            display: flex;
+            justify-content: center;
+        }
+        .cover {
+            width: 100%;
+            max-width: 140px; /* Reduced max-width */
+            height: auto;
+            object-fit: cover;
+            border-radius: 10px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease-in-out;
+            margin: 10px;
+        }
+        .cover:hover {
+            transform: scale(1.05);
+        }
+        .modal, .episode-modal, .video-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content, .episode-modal-content, .video-modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            width: 600px;
+            max-width: 90%;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+        .modal button, .episode-modal button, .video-modal button {
+            padding: 12px 20px;
+            font-size: 1.1em;
+            margin: 10px 0;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+        .modal button:hover, .episode-modal button:hover, .video-modal button:hover {
+            background-color: #0056b3;
+        }
+        .episode-list {
+            max-height: 400px;
+            overflow-y: auto;
+            text-align: left;
+        }
+        .episode-list button {
+            width: 100%;
+            margin: 5px 0;
+            padding: 10px;
+            font-size: 1em;
+        }
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        video {
+            width: 100%;
+            max-width: 800px;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Search Bar Styles */
+        .search-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .search-input {
+            padding: 10px;
+            font-size: 1.1em;
+            width: 80%;
+            max-width: 400px;
+            border: 2px solid #007bff;
+            border-radius: 25px;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #0056b3;
+        }
+
+       
+        #showsContainer {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); /* Adjusting the size */
+            gap: 15px;
+            justify-content: center;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        Jcorp Nomad - Shows
+    </header>
+
+    <div class="content">
+        <div class="search-container">
+            <input type="text" id="searchBar" class="search-input" placeholder="Search for a show..." oninput="filterShows()">
+        </div>
+        <p>Select a show below to view episodes:</p>
+        <div id="showsContainer"></div>
+    </div>
+
+    <div id="episodeModal" class="episode-modal">
+        <div class="episode-modal-content">
+            <h2>Select an Episode</h2>
+            <div id="episodeList" class="episode-list"></div>
+            <button onclick="closeEpisodeModal()">Close</button>
+        </div>
+    </div>
+
+   <div id="modal" class="modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation();">
+        <h2>What would you like to do?</h2>
+        <button id="viewButton">View in Browser</button>
+        <button id="downloadButton">Download</button>
+    </div>
+</div>
+
+    <div id="videoModal" class="video-modal">
+        <div class="video-modal-content">
+            <div class="video-container">
+                <video id="videoPlayer" controls>
+                    Your browser does not support the video tag.
+                </video>
+                <button onclick="closeVideo()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentEpisode = null;
+        const videoFormats = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
+        let shows = [];
+
+        fetch('/media.json')
+            .then(response => response.json())
+            .then(data => {
+                shows = data.shows;
+                displayShows(shows);
+            })
+            .catch(error => console.error('Error loading shows:', error));
+
+        function displayShows(showsToDisplay) {
+            const showsContainer = document.getElementById('showsContainer');
+            showsContainer.innerHTML = '';
+            
+            showsToDisplay.forEach(show => {
+                const coverImage = document.createElement('img');
+                coverImage.src = show.cover;
+                coverImage.alt = show.name;
+                coverImage.classList.add('cover');
+                coverImage.onclick = () => showEpisodes(show);
+
+                const coverContainer = document.createElement('div');
+                coverContainer.classList.add('cover-container');
+                coverContainer.appendChild(coverImage);
+                showsContainer.appendChild(coverContainer);
+            });
+        }
+
+        function showEpisodes(show) {
+            const episodeList = document.getElementById('episodeList');
+            episodeList.innerHTML = '';
+            document.getElementById('episodeModal').style.display = 'flex';
+
+            show.episodes.forEach(episode => {
+                if (!isVideoFile(episode.file)) return;
+
+                const episodeButton = document.createElement('button');
+                episodeButton.textContent = episode.name;
+                episodeButton.onclick = () => showEpisodeOptions(episode);
+                episodeList.appendChild(episodeButton);
+            });
+        }
+
+        function closeEpisodeModal() {
+            document.getElementById('episodeModal').style.display = 'none';
+        }
+
+        function isVideoFile(fileName) {
+            return videoFormats.some(format => fileName.toLowerCase().endsWith(format));
+        }
+
+        function showEpisodeOptions(episode) {
+            currentEpisode = episode;
+            document.getElementById('modal').style.display = 'flex';
+
+            document.getElementById('viewButton').onclick = () => {
+                openVideo(getFileUrl(currentEpisode.file, 'view'));
+                document.getElementById('modal').style.display = 'none';
+            };
+
+            document.getElementById('downloadButton').onclick = () => {
+                const link = document.createElement('a');
+                link.href = getDownloadUrl(currentEpisode.file);
+                link.download = currentEpisode.name;
+                link.click();
+                document.getElementById('modal').style.display = 'none';
+            };
+        }
+
+        function openVideo(videoSrc) {
+            document.getElementById('videoPlayer').src = videoSrc;
+            document.getElementById('videoModal').style.display = 'flex';
+        }
+
+        function closeVideo() {
+            document.getElementById('videoPlayer').pause();
+            document.getElementById('videoModal').style.display = 'none';
+        }
+
+        function getFileUrl(filePath, action) {
+            return `/media?file=${encodeURIComponent('/' + filePath)}`;
+        }
+
+        function getDownloadUrl(filePath) {
+            return `/media.json?file=${encodeURIComponent('/' + filePath)}`;
+        }
+
+        function filterShows() {
+            const query = document.getElementById('searchBar').value.toLowerCase();
+            const filteredShows = shows.filter(show => show.name.toLowerCase().includes(query));
+            displayShows(filteredShows);
+        }
+        function closeModal(event) {
+    if (event.target === document.getElementById('modal')) {
+        document.getElementById('modal').style.display = 'none';
+    }
+}
+
+    </script>
+</body>
+</html>

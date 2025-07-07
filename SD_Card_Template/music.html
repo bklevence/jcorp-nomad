@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Jcorp Nomad Media Server - Music">
+    <title>Music - Jcorp Nomad Media Server</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 2em;
+            border-bottom: 3px solid #0056b3;
+        }
+        .content {
+            padding: 20px;
+            text-align: center;
+        }
+        .search-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .search-input {
+            padding: 10px;
+            font-size: 1.1em;
+            width: 80%;
+            max-width: 400px;
+            border: 2px solid #007bff;
+            border-radius: 25px;
+            outline: none;
+        }
+        .song-container {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+        .song-item {
+            padding: 15px;
+            background-color: #ddd;
+            border-radius: 10px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+            width: 80%;
+            max-width: 400px;
+            text-align: center;
+            transition: transform 0.3s ease-in-out;
+        }
+        .song-item:hover {
+            transform: scale(1.05);
+        }
+        .audio-player {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .audio-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .audio-controls button {
+            padding: 10px;
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .audio-controls button:hover {
+            background-color: #004494;
+        }
+        .progress-container {
+            width: 80%;
+            max-width: 600px;
+            background-color: #ccc;
+            border-radius: 5px;
+            height: 8px;
+            cursor: pointer;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #0056b3;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>Jcorp Nomad - Music</header>
+    <div class="search-container">
+        <input type="text" id="searchBar" class="search-input" placeholder="Search for a song..." oninput="filterSongs()">
+    </div>
+    <div class="content">
+        <p>Select a song to play:</p>
+        <div id="musicContainer" class="song-container"></div>
+    </div>
+    <div class="audio-player">
+        <div id="currentSong">No song playing</div>
+        <div class="progress-container" onclick="setProgress(event)">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div class="audio-controls">
+            <button onclick="prevSong()">⏮ Prev</button>
+            <button onclick="togglePlayPause()">▶️/⏸</button>
+            <button onclick="nextSong()">⏭ Next</button>
+        </div>
+        <audio id="audioPlayer" ontimeupdate="updateProgress()"></audio>
+    </div>
+    <script>
+        let currentSongIndex = 0;
+        let songs = [];
+        const audioPlayer = document.getElementById('audioPlayer');
+        const currentSongDisplay = document.getElementById('currentSong');
+        const progressBar = document.getElementById('progressBar');
+
+        fetch('/media.json')
+            .then(response => response.json())
+            .then(data => {
+                songs = data.music;
+                displaySongs(songs);
+            })
+            .catch(error => console.error('Error loading songs:', error));
+
+        function displaySongs(songList) {
+            const musicContainer = document.getElementById('musicContainer');
+            musicContainer.innerHTML = '';
+            songList.forEach((song, index) => {
+                const songItem = document.createElement('div');
+                songItem.textContent = song.name;
+                songItem.classList.add('song-item');
+                songItem.onclick = () => playSong(index);
+                musicContainer.appendChild(songItem);
+            });
+        }
+
+        function playSong(index) {
+            currentSongIndex = index;
+            const song = songs[index];
+            audioPlayer.src = getFileUrl(song.file);
+            audioPlayer.play();
+            currentSongDisplay.textContent = `Now Playing: ${song.name}`;
+        }
+
+        function togglePlayPause() {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+            } else {
+                audioPlayer.pause();
+            }
+        }
+
+        function nextSong() {
+            if (currentSongIndex < songs.length - 1) {
+                playSong(currentSongIndex + 1);
+            }
+        }
+
+        function prevSong() {
+            if (currentSongIndex > 0) {
+                playSong(currentSongIndex - 1);
+            }
+        }
+
+        function getFileUrl(filePath) {
+            return `/media?file=${encodeURIComponent('/' + filePath)}`;
+        }
+
+        function filterSongs() {
+            const query = document.getElementById('searchBar').value.toLowerCase();
+            const filteredSongs = songs.filter(song => song.name.toLowerCase().includes(query));
+            displaySongs(filteredSongs);
+        }
+
+        function updateProgress() {
+            const progressPercent = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+        }
+
+        function setProgress(event) {
+            const width = event.currentTarget.clientWidth;
+            const clickX = event.offsetX;
+            const duration = audioPlayer.duration;
+            audioPlayer.currentTime = (clickX / width) * duration;
+        }
+    </script>
+</body>
+</html>

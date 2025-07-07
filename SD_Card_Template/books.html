@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Jcorp Nomad Media Server - Books">
+    <title>Books - Jcorp Nomad Media Server</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+            text-align: center;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            font-size: 2em;
+            border-bottom: 3px solid #0056b3;
+        }
+        .content {
+            padding: 20px;
+        }
+        .book-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 20px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .book-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+        }
+        .cover {
+            width: 150px;
+            height: 225px;
+            object-fit: cover;
+            border-radius: 10px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease-in-out;
+        }
+        .cover:hover {
+            transform: scale(1.05);
+        }
+        .book-title {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            width: 400px;
+            max-width: 90%;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+        .modal h2 {
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            color: #333;
+        }
+        .modal button {
+            padding: 12px 20px;
+            font-size: 1.1em;
+            margin: 10px 0;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+        .modal button:hover {
+            background-color: #0056b3;
+        }
+        .pdf-viewer {
+            width: 100%;
+            height: 80vh;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        Jcorp Nomad - Books
+    </header>
+    <div class="content">
+        <p>Choose a book below to view or download:</p>
+        <div class="book-grid" id="bookGrid"></div>
+    </div>
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle">What would you like to do with this book?</h2>
+            <button id="viewButton">View in Browser</button>
+            <button id="downloadButton">Download</button>
+        </div>
+    </div>
+    <div id="pdfModal" class="modal">
+        <div class="modal-content" style="width: 90%; height: 90%;">
+            <button onclick="closePdfViewer()" style="float:right;">Close</button>
+            <iframe id="pdfViewer" class="pdf-viewer"></iframe>
+        </div>
+    </div>
+    <script>
+        let currentBook = null;
+        fetch('/media.json')
+            .then(response => response.json())
+            .then(data => {
+                const books = data.books;
+                const bookGrid = document.getElementById('bookGrid');
+                books.forEach(book => {
+                    const bookContainer = document.createElement('div');
+                    bookContainer.classList.add('book-container');
+                    bookContainer.innerHTML = `
+                        <img class="cover" src="${book.cover}" alt="${book.name}">
+                        <div class="book-title">${book.name}</div>
+                    `;
+                    bookContainer.onclick = () => {
+                        currentBook = book;
+                        document.getElementById('modalTitle').innerText = `What would you like to do with "${book.name}"?`;
+                        document.getElementById('modal').style.display = 'flex';
+                    };
+                    bookGrid.appendChild(bookContainer);
+                });
+            })
+            .catch(error => console.error('Error loading books:', error));
+        
+        document.getElementById('viewButton').onclick = () => {
+            if (currentBook) {
+                document.getElementById('pdfViewer').src = currentBook.file;
+                document.getElementById('pdfModal').style.display = 'flex';
+            }
+            document.getElementById('modal').style.display = 'none';
+        };
+        
+        document.getElementById('downloadButton').onclick = () => {
+            if (currentBook) {
+                const link = document.createElement('a');
+                link.href = currentBook.file;
+                link.download = currentBook.name;
+                link.click();
+            }
+            document.getElementById('modal').style.display = 'none';
+        };
+        
+        function closePdfViewer() {
+            document.getElementById('pdfModal').style.display = 'none';
+            document.getElementById('pdfViewer').src = '';
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Jcorp Nomad Media Server - Movies">
+    <title>Movies - Jcorp Nomad Media Server</title>
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        header {
+            background-color: #007bff;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-size: 2em;
+            border-bottom: 3px solid #0056b3;
+        }
+        .content {
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* Search Bar Styles */
+        .search-container {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .search-input {
+            padding: 10px;
+            font-size: 1.1em;
+            width: 80%;
+            max-width: 400px;
+            border: 2px solid #007bff;
+            border-radius: 25px;
+            outline: none;
+        }
+
+        .search-input:focus {
+            border-color: #0056b3;
+        }
+
+        #moviesContainer {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            justify-content: center;
+            padding: 10px;
+        }
+        .cover-container {
+            cursor: pointer;
+            text-align: center;
+        }
+        .cover {
+            width: 100%;
+            max-width: 200px;
+            height: auto;
+            object-fit: cover;
+            border-radius: 10px;
+            box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease-in-out;
+        }
+        .cover:hover {
+            transform: scale(1.05);
+        }
+        .modal, .video-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content, .video-modal-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+        .modal button, .video-modal button {
+            padding: 12px;
+            font-size: 1em;
+            margin: 10px 0;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+        .modal button:hover, .video-modal button:hover {
+            background-color: #0056b3;
+        }
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        video {
+            width: 100%;
+            max-width: 800px;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+        }
+        @media (max-width: 768px) {
+            #moviesContainer {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .cover {
+                max-width: 150px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        Jcorp Nomad - Movies
+    </header>
+    <div class="search-container">
+        <input type="text" id="searchBar" class="search-input" placeholder="Search for a movie..." oninput="filterMovies()">
+    </div>
+    <div class="content">
+        <p>Choose a movie below to view or download:</p>
+        <div id="moviesContainer"></div>
+    </div>
+    <div id="modal" class="modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation();">
+        <h2>What would you like to do?</h2>
+        <button id="viewButton">View in Browser</button>
+        <button id="downloadButton">Download</button>
+    </div>
+</div>
+    <div id="videoModal" class="video-modal">
+        <div class="video-modal-content">
+            <div class="video-container">
+                <video id="videoPlayer" controls>
+                    <source id="videoSource" type="video/mp4">
+                    Your browser does not support the video tag.
+                </video>
+                <button onclick="closeVideo()">Close</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        let movies = [];
+        let currentMovie = null;
+        const videoFormats = ['.mp4', '.mkv', '.avi', '.mov', '.webm'];
+
+        fetch('/media.json')
+            .then(response => response.json())
+            .then(data => {
+                movies = data.movies;
+                displayMovies(movies);
+            })
+            .catch(error => console.error('Error loading movies:', error));
+
+        function displayMovies(movieList) {
+            const moviesContainer = document.getElementById('moviesContainer');
+            moviesContainer.innerHTML = '';
+            movieList.forEach(movie => {
+                if (!isVideoFile(movie.file)) return;
+                const coverContainer = document.createElement('div');
+                coverContainer.classList.add('cover-container');
+
+                const coverImage = document.createElement('img');
+                coverImage.src = movie.cover;
+                coverImage.alt = movie.name;
+                coverImage.classList.add('cover');
+                coverImage.onclick = () => showMovieOptions(movie);
+
+                const movieTitle = document.createElement('p');
+                movieTitle.textContent = movie.name;
+                movieTitle.style.marginTop = '10px';
+                movieTitle.style.fontWeight = 'bold';
+
+                coverContainer.appendChild(coverImage);
+                coverContainer.appendChild(movieTitle);
+                moviesContainer.appendChild(coverContainer);
+            });
+        }
+
+        function isVideoFile(fileName) {
+            return videoFormats.some(format => fileName.toLowerCase().endsWith(format));
+        }
+
+        function showMovieOptions(movie) {
+            currentMovie = movie;
+            document.getElementById('modal').style.display = 'flex';
+            document.getElementById('viewButton').onclick = () => {
+                openVideo(getFileUrlForView(currentMovie.file));
+                document.getElementById('modal').style.display = 'none';
+            };
+            document.getElementById('downloadButton').onclick = () => {
+                downloadMovie(currentMovie);
+                document.getElementById('modal').style.display = 'none';
+            };
+        }
+
+        function getFileUrlForView(filePath) {
+            // Original way for viewing (using /media endpoint)
+            return `/media?file=${encodeURIComponent('/' + filePath)}`;
+        }
+
+        function downloadMovie(movie) {
+            // Direct download from media.json path
+            const downloadUrl = movie.file;
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = movie.name;
+            link.click();
+        }
+
+        function openVideo(videoSrc) {
+            const videoModal = document.getElementById('videoModal');
+            const videoSource = document.getElementById('videoSource');
+            const videoPlayer = document.getElementById('videoPlayer');
+            videoSource.src = videoSrc;
+            videoPlayer.load();
+            videoModal.style.display = 'flex';
+            videoPlayer.play();
+        }
+
+        function closeVideo() {
+            const videoModal = document.getElementById('videoModal');
+            const videoPlayer = document.getElementById('videoPlayer');
+            const currentScrollPosition = window.scrollY;  // Get the current scroll position
+            videoPlayer.pause();
+            videoPlayer.src = "";
+            videoModal.style.display = 'none';
+            location.reload();  // Reload the page
+
+            
+            setTimeout(() => {
+                window.scrollTo(0, currentScrollPosition);  // Scroll back to the previous position
+            }, 0);
+        }
+
+        function filterMovies() {
+            const query = document.getElementById('searchBar').value.toLowerCase();
+            const filteredMovies = movies.filter(movie => movie.name.toLowerCase().includes(query));
+            displayMovies(filteredMovies);
+        }
+
+        document.getElementById('videoPlayer').addEventListener('ended', closeVideo);
+function closeModal(event) {
+    if (event.target === document.getElementById('modal')) {
+        document.getElementById('modal').style.display = 'none';
+    }
+}
+
+    </script>
+</body>
+</html>
