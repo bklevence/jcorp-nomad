@@ -19,7 +19,7 @@ Stream movies, music, books, and shows anywhere — no internet required.
 
 ## What is Nomad
 
-Jcorp Nomad is an open-source offline media server built for travel, remote work, classrooms, camping, and more. It runs entirely on an ESP32-S3 dev board, creates a local Wi-Fi hotspot, and serves media through a browser-accessible interface. It does not require internet access and works similarly to in-flight entertainment systems.
+Jcorp Nomad is an open-source offline media server built for travel, remote work, classrooms, camping, and more. It runs entirely on an ESP32-S3 dev board, creates a local Wi-Fi hotspot, and serves media through a browser-accessible interface. It does not require internet access and works similarly to in-flight entertainment systems. It also allows multiple users watching seperate media streams at the same time. 
 
 This project is designed to be compact, simple, and easily modifiable. It includes optional 3D-printable hardware and a fully open source firmware and web interface.
 
@@ -125,7 +125,8 @@ Ensure all images and media files use matching names for proper display.
 - Wi-Fi name and password can be changed in `firmware/Nomad.ino`
 - Branding (logo, favicon) can be replaced in `/SD_Card_Template/`
 - Sections (Movies, Music, etc.) can be removed from `menu.html`
-- Web interface can be edited using any text editor or SquareLine Studio
+- Web interface can be edited using any text editor
+- The screen UI can be edited with SquareLine Studio (the free version is fine) 
 
 ---
 
@@ -160,13 +161,13 @@ These are features I'd like to explore in future updates. If you'd like to contr
 Inspired by [Backcountry Beacon](https://www.instructables.com/USB-Powered-Offline-Map-Server/), the goal is to serve cached map tiles and display the live GPS position from the user's phone or connected device — entirely offline.
 
 ### HTML5 Games
-Similar to [Gams Offline](https://github.com/Gams-Offline/Gams), I plan to embed simple HTML5 games that work in-browser. Great for long trips or when users want a break from videos and music.
+Similar to [Gams Offline](https://github.com/Gams-Offline/Gams), I would like to embed simple HTML5 games that work in-browser. The selection in Gams is amazing and make me think of cool math games, would be neat to have even though most require a keyboard.
 
 ### Audiobook-Friendly Mode
-Improve playback for long-form audio by adding bookmarks, chapter display, and smart pause/resume. Intended for better audiobook handling in the Music section.
+Improve playback for long-form audio by adding bookmarks, chapter display, and smart pause/resume. Intended for better audiobook handling in the Music section. Potentialy add an entire new audiobook section or a seperate handling system for it in books (Under read it could have a listen option).
 
 ### File Upload Over USB
-Enable USB mass storage or dual-mode operation to allow users to drag and drop files directly to the SD card without removing it. This may require dynamic switching between USB and Wi-Fi server modes, or dual-core task handling.
+Enable USB mass storage or dual-mode operation to allow users to drag and drop files directly to the SD card without removing it. This may require dynamic switching between USB and Wi-Fi server modes, or dual-core task handling. I worked on this for a long while, but couldnt find a relible way to have it switch modes and still function, usualy crashes trying to reboot media, I also wasnt able to get it to run the python script to generate media.json, a new system would be needed.
 
 ---
 
@@ -188,8 +189,8 @@ You are free to use, modify, and distribute this project. Attribution is appreci
 
 ## Credits
 
-Developed by **Jackson Studner (Jcorp)**.  
-Inspired by open-source offline projects like Backcountry Beacon and Gams Offline.
+Developed by **Jackson Studner (Jcorp Tech)**.  
+Inspired by open-source offline projects like Backcountry Beacon.
 
 If you build, remix, or improve this project, please consider submitting a pull request or tagging the project.
 
