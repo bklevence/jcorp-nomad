@@ -2,7 +2,7 @@
 
 
 <div align="center">
-  <img src="docs/Nomad Technical Diagram.png" alt="Jcorp Nomad Offline Media Server" width="800">
+  <img src="Screenshot 2025-07-07 193521.png" alt="Jcorp Nomad Offline Media Server" width="800">
 </div>
 
 
