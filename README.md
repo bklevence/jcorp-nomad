@@ -5,15 +5,15 @@
   <img src="Screenshot 2025-07-07 193521.png" alt="Jcorp Nomad Offline Media Server" width="800">
 </div>
 
+<p align="center"><b>A portable, offline media server powered by the ESP32-S3 in a thumbdrive form factor.</b><br>
+Stream movies, music, books, and shows anywhere — no internet required.</p>
 
-**A portable, offline media server powered by the ESP32-S3 In a Thumbdrive form factor.**  
-Stream movies, music, books, and shows anywhere — no internet required.
+<p align="center">
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
+  <img src="https://img.shields.io/badge/platform-ESP32--S3-orange" alt="Platform: ESP32-S3" />
+  <img src="https://img.shields.io/badge/status-beta-lightgrey" alt="Status: Beta" />
+</p>
 
-![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)  
-![Platform](https://img.shields.io/badge/platform-ESP32--S3-orange)  
-![Status](https://img.shields.io/badge/status-beta-lightgrey)
-
-</div>
 
 ---
 
