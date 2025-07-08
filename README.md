@@ -25,6 +25,38 @@ This project is designed to be compact, simple, and easily modifiable. It includ
 
 ---
 
+## Project Inspiration
+This project was inspired by my experience running a Jellyfin server at home. I love having full control over my media library, and Jellyfin gave me everything I wanted > streaming movies, shows, books, and music, all from my own hardware. Naturally, I started looking for ways to take that experience on the go.
+
+My first thought was to build a portable server, but I quickly ran into some major hurdles:
+
+- Power-hungry hardware — Even low-power x86 boxes needed a hefty battery setup to stay running for long trips.
+
+- High cost — SBCs like the Raspberry Pi 4, plus power banks, USB storage, and screen interfaces added up quickly.
+
+- Heat and reliability — Trying to cram a full stack of services into a compact case often led to thermal issues and instability when running software meant for server hardware.
+
+That’s when I pivoted.
+
+Instead of replicating a full home media server, I focused on delivering the core experience:
+
+- Offline access
+
+- Local Wi-Fi hotspot
+
+- Simple media browsing and playback
+
+- Support for multiple users
+
+The ESP32-S3 offered just enough performance to handle all of that - with a fraction of the power draw and cost.
+The result is Nomad: a minimalist, reliable, and low-cost media server that delivers the essential features of a home streaming setup in a smaller than pocket sized format.
+
+Is it fancy? No.
+Does it work? Absolutely.
+And it’s open-source, so anyone can expand, improve, and adapt it for their own needs.
+
+---
+
 ## Features
 
 - Creates a local Wi-Fi hotspot with captive portal  
