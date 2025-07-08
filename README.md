@@ -208,7 +208,7 @@ Enable USB mass storage or dual-mode operation to allow users to drag and drop f
 Looking for a step-by-step tutorial?  
 Check out the full build guide on **Instructables** for detailed instructions, photos, and tips on setting up Jcorp Nomad.
 
-👉 [Read the Instructables Guide](https://www.instructables.com/My-Link-When-I-Publish-Lol-Sorry) Not yet functional (sorry, coming soon!)
+👉 [Read the Instructables Guide](https://www.instructables.com/Jcorp-Nomad-Mini-WIFI-Media-Server/) 
 
 ---
 
