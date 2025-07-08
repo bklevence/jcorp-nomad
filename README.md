@@ -9,7 +9,7 @@
 Stream movies, music, books, and shows anywhere — no internet required.</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT" />
+  <img src="https://img.shields.io/badge/license-CC--BY--NC--SA%204.0-blue.svg" alt="License: CC BY-NC-SA 4.0" />
   <img src="https://img.shields.io/badge/platform-ESP32--S3-orange" alt="Platform: ESP32-S3" />
   <img src="https://img.shields.io/badge/status-beta-lightgrey" alt="Status: Beta" />
 </p>
@@ -214,8 +214,12 @@ Check out the full build guide on **Instructables** for detailed instructions, p
 
 ## License
 
-This project is licensed under the **MIT License**.  
-You are free to use, modify, and distribute this project. Attribution is appreciated but not required.
+This project is licensed under the [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+
+You may remix, adapt, and share this project **for non-commercial use**, as long as you give credit and share under the same terms.
+
+For commercial licensing, please contact the author.
+
 
 ---
 
