@@ -1,1 +1,2 @@
-firmware/Totally\ not\ the\ library\ files\ \+\ versions/** linguist-vendored=true
+*.c linguist-vendored
+*.h linguist-vendored
