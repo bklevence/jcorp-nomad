@@ -5,6 +5,8 @@
 #include "FS.h"
 #include "SD_MMC.h"
 #include "DNSServer.h"
+#include <ArduinoJson.h>
+
 
 // Waveshare Display and UI Libraries
 #include "Display_ST7789.h"
@@ -55,6 +57,144 @@ void updateClientCount() {
         updateUI(connectedClients);
     }
 }
+
+void generateMediaJSON() {
+    Serial.println("[MediaGen] Called generateMediaJSON()");
+
+    if (SD_MMC.exists("/media.json")) {
+        SD_MMC.remove("/media.json");
+        Serial.println("[MediaGen] Old media.json removed.");
+    }
+
+    StaticJsonDocument<32768> doc;
+
+    // Movies
+    JsonArray movies = doc.createNestedArray("movies");
+    File moviesDir = SD_MMC.open("/Movies");
+    while (File file = moviesDir.openNextFile()) {
+        if (!file.isDirectory()) {
+            String name = file.name();
+            if (name.endsWith(".mp4") || name.endsWith(".mkv")) {
+                Serial.println("[MediaGen] Found movie: " + name);
+                String base = name.substring(name.lastIndexOf('/') + 1);
+                base = base.substring(0, base.lastIndexOf('.'));
+
+                String cover = "movies/" + base + ".jpg";
+                if (!SD_MMC.exists("/Movies/" + base + ".jpg")) {
+                    cover = "placeholder.jpg";
+                }
+
+                JsonObject item = movies.createNestedObject();
+                item["name"] = base;
+                item["cover"] = cover;
+                item["file"] = "Movies/" + base + name.substring(name.lastIndexOf('.'));  // Ensure full filename
+            }
+        }
+    }
+
+    // Shows
+    JsonArray shows = doc.createNestedArray("shows");
+    File showsRoot = SD_MMC.open("/Shows");
+
+    while (File folder = showsRoot.openNextFile()) {
+        if (folder.isDirectory()) {
+            String folderName = String(folder.name()); // just "GravityFalls"
+            String fullPath = "/Shows/" + folderName;
+
+            Serial.println("[MediaGen] Found show folder: " + folderName);
+
+            JsonObject show = shows.createNestedObject();
+            show["name"] = folderName;
+
+            String coverPath = "shows/" + folderName + ".jpg";
+            if (!SD_MMC.exists("/Shows/" + folderName + ".jpg")) {
+                coverPath = "placeholder.jpg";
+            }
+            show["cover"] = coverPath;
+
+            JsonArray episodes = show.createNestedArray("episodes");
+
+            File epFolder = SD_MMC.open(fullPath);
+            while (File ep = epFolder.openNextFile()) {
+                if (!ep.isDirectory()) {
+                    String epName = String(ep.name());
+                    if (epName.endsWith(".mp4") || epName.endsWith(".mkv")) {
+                        String epBase = epName.substring(epName.lastIndexOf('/') + 1);
+
+                        JsonObject epItem = episodes.createNestedObject();
+                        epItem["name"] = epBase;
+                        epItem["file"] = "Shows/" + folderName + "/" + epBase;
+
+                        Serial.println("  [MediaGen] Episode: " + epBase);
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
+    // Books
+    JsonArray books = doc.createNestedArray("books");
+    File booksDir = SD_MMC.open("/Books");
+    while (File file = booksDir.openNextFile()) {
+        if (!file.isDirectory()) {
+            String name = file.name();
+            if (name.endsWith(".pdf") || name.endsWith(".epub")) {
+                Serial.println("[MediaGen] Found book: " + name);
+                String base = name.substring(name.lastIndexOf('/') + 1);
+                base = base.substring(0, base.lastIndexOf('.'));
+
+                String cover = "books/" + base + ".jpg";
+                if (!SD_MMC.exists("/Books/" + base + ".jpg")) {
+                    cover = "placeholder.jpg";
+                }
+
+                JsonObject item = books.createNestedObject();
+                item["name"] = base;
+                item["cover"] = cover;
+                item["file"] = "Books/" + base + name.substring(name.lastIndexOf('.'));
+            }
+        }
+    }
+
+    // Music
+    JsonArray music = doc.createNestedArray("music");
+    File musicDir = SD_MMC.open("/Music");
+    while (File file = musicDir.openNextFile()) {
+        if (!file.isDirectory()) {
+            String name = file.name();
+            if (name.endsWith(".mp3")) {
+                Serial.println("[MediaGen] Found music: " + name);
+                String base = name.substring(name.lastIndexOf('/') + 1);
+                base = base.substring(0, base.lastIndexOf('.'));
+
+                String cover = "music/" + base + ".jpg";
+                if (!SD_MMC.exists("/Music/" + base + ".jpg")) {
+                    cover = "placeholder.jpg";
+                }
+
+                JsonObject item = music.createNestedObject();
+                item["name"] = base;
+                item["cover"] = cover;
+                item["file"] = "Music/" + base + ".mp3";
+            }
+        }
+    }
+
+    // Save to media.json
+    File jsonFile = SD_MMC.open("/media.json", FILE_WRITE);
+    if (!jsonFile) {
+        Serial.println("[MediaGen] Error opening media.json for writing.");
+        return;
+    }
+
+    serializeJsonPretty(doc, jsonFile);
+    jsonFile.close();
+    Serial.println("[MediaGen] media.json created successfully.");
+}
+
 
 // ==================== MEDIA STREAM HANDLER ====================
 
@@ -156,6 +296,10 @@ void setup() {
     }
     Serial.println("SD Card initialized successfully!");
 
+    delay(2000); 
+
+    generateMediaJSON();  
+
     // Start Captive DNS redirection
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 
@@ -185,6 +329,46 @@ void setup() {
         Serial.println("Android/NORMAL captive portal request detected, serving index.html");
         request->send(SD_MMC, "/index.html", "text/html");
     });
+    server.on("/dlna/desc.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/xml", R"rawliteral(
+        <?xml version="1.0"?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0">
+          <specVersion>
+            <major>1</major>
+            <minor>0</minor>
+          </specVersion>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+            <friendlyName>Nomad Media Server</friendlyName>
+            <manufacturer>JCorp</manufacturer>
+            <modelName>Nomad</modelName>
+            <UDN>uuid:ESP32-DLNA-FAKE-1234</UDN>
+          </device>
+        </root>
+      )rawliteral");
+    });
+
+    server.on("/dlna/contentdir.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      String xml = "<?xml version=\"1.0\"?><ContentDirectory>";
+      File root = SD_MMC.open("/Movies");
+      if (root && root.isDirectory()) {
+        File file = root.openNextFile();
+        while (file) {
+          if (!file.isDirectory()) {
+            String name = file.name();
+            xml += "<item>";
+            xml += "<title>" + name + "</title>";
+            xml += "<res protocolInfo=\"http-get:*:video/mp4:*\">";
+            xml += "http://192.168.4.1/Movies/" + name + "</res>";
+            xml += "</item>";
+          }
+          file = root.openNextFile();
+        }
+      }
+      xml += "</ContentDirectory>";
+      request->send(200, "text/xml", xml);
+    });
+
 
     // Static HTML routes
     server.serveStatic("/movies.html", SD_MMC, "/movies.html");
