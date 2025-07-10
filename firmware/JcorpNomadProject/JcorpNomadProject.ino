@@ -45,12 +45,42 @@ void RGB_SetColor(uint8_t r, uint8_t g, uint8_t b) {
     currentLEDMode = 2; 
     Set_Color(g, r, b);
 }
+extern lv_obj_t *ui_wifi;
+extern lv_obj_t *ui_SDcard;
+bool lastWifiStatus = false;
+bool lastSDStatus = false;
 // Update the UI with the number of connected users
 void updateUI(int userCount) {
     char buffer[10];
     snprintf(buffer, sizeof(buffer), "%d", userCount);
     lv_label_set_text(ui_uiuserlabel, buffer);
 }
+void updateToggleStatus() {
+    bool currentWifiStatus = WiFi.softAPIP();
+    if (currentWifiStatus != lastWifiStatus) {
+        if (currentWifiStatus) {
+            lv_obj_add_state(ui_wifi, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_wifi, LV_STATE_CHECKED);
+            Serial.println("[Status] WiFi AP failure detected.");
+        }
+        lastWifiStatus = currentWifiStatus;
+    }
+
+    bool currentSDStatus = SD_MMC.cardType() != CARD_NONE && SD_MMC.begin("/sdcard", true);
+    if (currentSDStatus != lastSDStatus) {
+        if (currentSDStatus) {
+            lv_obj_add_state(ui_SDcard, LV_STATE_CHECKED);
+        } else {
+            lv_obj_clear_state(ui_SDcard, LV_STATE_CHECKED);
+            Serial.println("[Status] SD card failure detected.");
+        }
+        lastSDStatus = currentSDStatus;
+    }
+}
+
+
+
 // Get a count of currently connected WiFi clients
 void updateClientCount() {
     wifi_sta_list_t wifi_sta_list;
@@ -473,7 +503,7 @@ void setup() {
     Lvgl_Init();
     Set_Backlight(90); // Set display brightness
     ui_init();         // Load the GUI
-
+    
     Serial.begin(115200);
     delay(1000);
     Serial.println("\n=== ESP32-S3 Captive Portal & SDMMC Server ===");
@@ -719,6 +749,7 @@ server.on("/rename", HTTP_POST, handleRename);
 server.on("/delete", HTTP_POST, handleDelete);
     // Start the web server
     server.begin();
+    updateToggleStatus(); // Reflect initial WiFi and SD status
     Serial.println("Web Server started!");
 }
 
@@ -732,9 +763,16 @@ void loop() {
         RGB_Lamp_Loop(2);
     }
 
+    static unsigned long lastUpdateTime = 0;
+    if (millis() - lastUpdateTime > 1000) {
+        updateToggleStatus();
+        lastUpdateTime = millis();
+    }
+
     delay(5);
     updateClientCount();
 }
+
 
 void RGB_SetMode(uint8_t mode) {
     currentLEDMode = mode;
