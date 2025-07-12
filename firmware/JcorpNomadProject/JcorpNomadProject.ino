@@ -29,6 +29,11 @@
 #define SD_D1_PIN 18
 #define SD_D2_PIN 17
 #define SD_D3_PIN 21
+
+String rfc3339Now() {
+  return "2025-07-12T12:00:00Z";  // Hard-coded UTC timestamp
+}
+
 // Captive portal DNS setup
 const byte DNS_PORT = 53;
 DNSServer dnsServer;
@@ -86,7 +91,33 @@ void updateToggleStatus() {
     }
 }
 
+// Stream a chunk of text to save RAM
+void opdsWrite(AsyncResponseStream *s, const String &chunk) {
+    s->print(chunk);
+}
+//(OPDS thing)
+String xmlEscape(const String &in) {        // we already added this
+  String out;
+  for (char c : in) {
+    switch (c) {
+      case '&':  out += "&amp;";  break;
+      case '<':  out += "&lt;";   break;
+      case '>':  out += "&gt;";   break;
+      default:   out += c;        break;
+    }
+  }
+  return out;
+}
 
+String slugify(const String &in) {          // new helper
+  String out;
+  for (char c : in) {
+    if (isalnum(c))       out += (char)tolower(c);
+    else if (c==' ' || c=='_' || c=='-') out += '-';
+    // every other char is dropped
+  }
+  return out;
+}
 
 // Get a count of currently connected WiFi clients
 void updateClientCount() {
@@ -228,6 +259,130 @@ void generateMediaJSON() {
     serializeJsonPretty(doc, jsonFile);
     jsonFile.close();
     Serial.println("[MediaGen] media.json created successfully.");
+}
+
+String absURL(const String &path) {
+  return "http://" + WiFi.softAPIP().toString() + path;
+}
+
+void handleOPDSRoot(AsyncWebServerRequest *request) {
+    AsyncResponseStream *res = request->beginResponseStream(
+        "application/atom+xml;profile=opds-catalog;kind=navigation");
+
+    opdsWrite(res, "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                   "<feed xmlns=\"http://www.w3.org/2005/Atom\" "
+                   "xmlns:opds=\"http://opds-spec.org/2010/catalog\">\n");
+
+    opdsWrite(res, "  <id>urn:uuid:nomad-opds-root</id>\n"
+                   "  <title>Nomad OPDS Catalog</title>\n"
+                   "  <updated>2025-07-12T12:00:00Z</updated>\n"
+                   "  <author><name>Nomad Server</name></author>\n");
+
+    // Add required navigation links
+    opdsWrite(res, "  <link rel=\"self\" href=\"" + absURL("/opds/root.xml") + "\" "
+                   "type=\"application/atom+xml;profile=opds-catalog;kind=navigation\"/>\n");
+    opdsWrite(res, "  <link rel=\"start\" href=\"" + absURL("/opds/root.xml") + "\" "
+                   "type=\"application/atom+xml;profile=opds-catalog;kind=navigation\"/>\n");
+
+    opdsWrite(res, "  <entry>\n"
+                   "    <title>All Books</title>\n"
+                   "    <id>urn:uuid:nomad-opds-books</id>\n"
+                   "    <updated>2025-07-12T12:00:00Z</updated>\n"
+                   "    <link rel=\"http://opds-spec.org/catalog\" "
+                   "type=\"application/atom+xml;profile=opds-catalog;kind=acquisition\" "
+                   "href=\"" + absURL("/opds/books.xml") + "\"/>\n"
+                   "  </entry>\n");
+
+    opdsWrite(res, "</feed>");
+    request->send(res);
+}
+
+
+void handleOPDSBooks(AsyncWebServerRequest *request) {
+    Serial.println("[OPDS] === handleOPDSBooks() called ===");
+    AsyncResponseStream *res =
+        request->beginResponseStream(
+            "application/atom+xml;profile=opds-catalog;kind=acquisition");
+
+    opdsWrite(res,"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+                  "<feed xmlns=\"http://www.w3.org/2005/Atom\" "
+                  "xmlns:opds=\"http://opds-spec.org/2010/catalog\">\n");
+    opdsWrite(res,
+      "  <id>urn:uuid:nomad-opds-books</id>\n"
+      "  <title>All Books</title>\n"
+      "  <updated>"+rfc3339Now()+"</updated>\n"
+      "  <link rel=\"self\"  href=\""+absURL("/opds/books.xml")+"\" "
+      "type=\"application/atom+xml;profile=opds-catalog;kind=acquisition\"/>\n"
+      "  <link rel=\"start\" href=\""+absURL("/opds/root.xml")+"\" "
+      "type=\"application/atom+xml;profile=opds-catalog;kind=navigation\"/>\n");
+
+    File dir = SD_MMC.open("/Books");
+    Serial.println("[OPDS] Opened /Books directory");
+
+    if (!dir || !dir.isDirectory()) {
+        Serial.println("[OPDS] /Books directory not found or is not a directory!");
+    }
+    while (dir && dir.isDirectory()) {
+        File file = dir.openNextFile();
+        if (!file) {
+            Serial.println("[OPDS] No more files in /Books");
+            break;
+        }
+
+        Serial.println(String("[OPDS] Found file: ") + file.name());
+
+        if (file.isDirectory()) {
+            Serial.println("[OPDS] Skipping directory");
+            continue;
+        }
+
+        String fn = file.name();
+        String fnLower = fn;
+        fnLower.toLowerCase();
+
+        if (!(fnLower.endsWith(".epub") || fnLower.endsWith(".pdf"))) {
+            Serial.println("[OPDS] Skipping non-ebook file: " + fn);
+            continue;
+        }
+
+        Serial.println("[OPDS] Processing book file: " + fn);
+
+
+        String base = fn.substring(fn.lastIndexOf('/')+1);
+        base = base.substring(0, base.lastIndexOf('.'));  
+        String safeTitle = xmlEscape(base);                 
+        String safeId    = "urn:uuid:nomad-book-" + slugify(base);  
+        String mime = fn.endsWith(".epub") ?
+                      "application/epub+zip" : "application/pdf";
+
+        // Cover (falls back to placeholder)
+        String coverPath = SD_MMC.exists("/Books/"+base+".jpg") ?
+                           "Books/"+base+".jpg" : "placeholder.jpg";
+
+        // Compute real download path
+        String ext    = fnLower.endsWith(".pdf") ? ".pdf" : ".epub";
+        String dlPath = "/Books/" + urlencode(base) + ext;
+
+        opdsWrite(res,"  <entry>\n"
+                      "    <title>"+safeTitle+"</title>\n"
+                      "    <id>"+safeId+"</id>\n"
+                      "    <updated>"+rfc3339Now()+"</updated>\n"
+                      "    <link rel=\"http://opds-spec.org/image/thumbnail\" "
+                      "type=\"image/jpeg\" href=\""+absURL("/"+urlencode(coverPath))+"\"/>\n"
+                      "    <link rel=\"http://opds-spec.org/acquisition\" "
+                      "type=\""+mime+"\" "
+                      "href=\"" + absURL(dlPath) + "\"/>\n"
+                      "  </entry>\n");
+
+    }
+    if (dir) {
+        dir.close();
+        Serial.println("[OPDS] Closed /Books directory");
+    }
+
+
+    opdsWrite(res,"</feed>");
+    request->send(res);
 }
 
 // ==================== MEDIA STREAM HANDLER ====================
@@ -587,6 +742,60 @@ void setup() {
 
     // Start Captive DNS redirection
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+    //OPDS Endpoint
+    server.on("/opds/root.xml", HTTP_GET, handleOPDSRoot);
+    server.on("/opds/books.xml", HTTP_GET, handleOPDSBooks);
+    //.m3u playlist endpoint
+    server.on("/playlist.m3u", HTTP_GET, [](AsyncWebServerRequest *request){
+        String playlist = "#EXTM3U\n";
+    server.on("/nomad.m3u", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // internally call the same code or just redirect
+        request->redirect("/playlist.m3u");
+    });
+
+        // === MOVIES ===
+        playlist += "# === MOVIES ===\n";
+        File movieDir = SD_MMC.open("/Movies");
+        if (movieDir && movieDir.isDirectory()) {
+            File file = movieDir.openNextFile();
+            while (file) {
+                String name = file.name();
+                if (!file.isDirectory() && (name.endsWith(".mp4") || name.endsWith(".mkv"))) {
+                    String fullPath = String("/Movies/") + file.name();
+                    playlist += "#EXTINF:-1," + String(file.name()) + "\n";
+                    playlist += "http://" + WiFi.softAPIP().toString() + "/media?file=" + urlencode(fullPath) + "\n";
+                }
+                file = movieDir.openNextFile();
+            }
+        }
+
+        // === SHOWS ===
+        playlist += "# === SHOWS ===\n";
+        File showsRoot = SD_MMC.open("/Shows");
+        if (showsRoot && showsRoot.isDirectory()) {
+            File showFolder = showsRoot.openNextFile();
+            while (showFolder) {
+                if (showFolder.isDirectory()) {
+                    String showFolderName = String(showFolder.name());  // e.g. "GravityFalls"
+                    String fullShowPath = "/Shows/" + showFolderName;
+
+                    File episodeDir = SD_MMC.open(fullShowPath);
+                    if (episodeDir && episodeDir.isDirectory()) {
+                        File ep = episodeDir.openNextFile();
+                        while (ep) {
+                            String epName = ep.name();
+                            if (!ep.isDirectory() && (epName.endsWith(".mp4") || epName.endsWith(".mkv"))) {
+                                String fullPath = fullShowPath + "/" + epName;
+                                playlist += "#EXTINF:-1," + epName + "\n";
+                                playlist += "http://" + WiFi.softAPIP().toString() + "/media?file=" + urlencode(fullPath) + "\n";
+                            }
+                            ep = episodeDir.openNextFile();
+                        }
+                    }
+                }
+                showFolder = showsRoot.openNextFile();
+            }
+        }
 
     //.m3u playlist endpoint
     server.on("/playlist.m3u", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -723,7 +932,89 @@ void setup() {
         request->send(response);
     });
 
+        // === MUSIC ===
+        playlist += "# === MUSIC ===\n";
+        File musicDir = SD_MMC.open("/Music");
+        if (musicDir && musicDir.isDirectory()) {
+            File file = musicDir.openNextFile();
+            while (file) {
+                String name = file.name();
+                if (!file.isDirectory() && name.endsWith(".mp3")) {
+                    String fullPath = String("/Music/") + file.name();
+                    playlist += "#EXTINF:-1," + String(file.name()) + "\n";
+                    playlist += "http://" + WiFi.softAPIP().toString() + "/media?file=" + urlencode(fullPath) + "\n";
+                }
+                file = musicDir.openNextFile();
+            }
+        }
 
+        request->send(200, "audio/x-mpegurl", playlist);
+    });
+
+    //fAKE dlna dISCOVERY
+    server.on("/dlna/device.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/xml", R"rawliteral(
+        <?xml version="1.0"?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0">
+          <specVersion>
+            <major>1</major>
+            <minor>0</minor>
+          </specVersion>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+            <friendlyName>Nomad Media Server</friendlyName>
+            <manufacturer>Jcorp</manufacturer>
+            <modelName>Nomad DLNA</modelName>
+            <UDN>uuid:ESP32-DLNA-NOMAD</UDN>
+          </device>
+        </root>
+      )rawliteral");
+    });
+    server.on("/ssdp/device-desc.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/xml", R"rawliteral(
+        <?xml version="1.0"?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0">
+          <specVersion>
+            <major>1</major>
+            <minor>0</minor>
+          </specVersion>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+            <friendlyName>Nomad Media Server</friendlyName>
+            <manufacturer>Jcorp</manufacturer>
+            <modelName>Nomad</modelName>
+            <modelNumber>1</modelNumber>
+            <UDN>uuid:ESP32-DLNA-FAKE-1234</UDN>
+          </device>
+        </root>
+      )rawliteral");
+    });
+    server.on("/dlna/description.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/xml", R"rawliteral(
+        <?xml version="1.0"?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0">
+          <specVersion>
+            <major>1</major>
+            <minor>0</minor>
+          </specVersion>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+            <friendlyName>Nomad Media</friendlyName>
+            <manufacturer>JCorp</manufacturer>
+            <modelName>ESP32-Nomad</modelName>
+            <UDN>uuid:nomad-dlna-esp32</UDN>
+          </device>
+        </root>
+      )rawliteral");
+    });
+    server.on("/description.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+        AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
+        response->addHeader("Application-URL", "http://" + WiFi.softAPIP().toString() + "/dlna/");
+        response->addHeader("Location", "/dlna/desc.xml");  // HTTP redirect target
+        request->send(response);
+    });
+
+    
     // Set LED mode: solid (0), rainbow (1), etc.
     server.on("/led/onoff", HTTP_POST, [](AsyncWebServerRequest *request){},
       NULL,
@@ -854,13 +1145,28 @@ void setup() {
     server.serveStatic("/books.html", SD_MMC, "/books.html");
     server.serveStatic("/shows.html", SD_MMC, "/shows.html");
     server.serveStatic("/admin.html", SD_MMC, "/admin.html");
-
+    server.serveStatic("/games.html", SD_MMC, "/games.html");
+    server.serveStatic("/maps.html", SD_MMC, "/maps.html");
+    server.serveStatic("/menu.html", SD_MMC, "/menu.html");
+    server.serveStatic("/movies", SD_MMC, "/movies.html");
+    server.serveStatic("/music",  SD_MMC, "/music.html");
+    server.serveStatic("/books",  SD_MMC, "/books.html");
+    server.serveStatic("/shows",  SD_MMC, "/shows.html");
+    server.serveStatic("/admin",  SD_MMC, "/admin.html");
+    server.serveStatic("/games",  SD_MMC, "/games.html");
+    server.serveStatic("/maps",   SD_MMC, "/maps.html");
+    server.serveStatic("/menu",   SD_MMC, "/menu.html");
     // Serve root directory and default to index.html
     server.serveStatic("/", SD_MMC, "/").setDefaultFile("index.html");
 
     // Endpoint for video/audio streaming
     server.on("/media", HTTP_GET, handleRangeRequest);
-    
+
+    // convenience redirect:  /opds  →  /opds/root.xml
+    server.on("/opds", HTTP_GET, [](AsyncWebServerRequest *req){
+        req->redirect("/opds/root.xml");
+    });
+
     server.on("/upload-show", HTTP_POST,
       // 1) immediate responder:
       [](AsyncWebServerRequest *request) {
