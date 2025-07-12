@@ -17,6 +17,25 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 
 ---
 
+
+## Experimental Branch Enhancements
+
+This branch includes several experimental features not yet available in `main`. These are actively being tested and refined:
+
+- **OPDS eBook Support** - Connect with eBook readers and track reading progress.
+- **Minimal M3U-based DLNA Support** - Allows media discovery on VLC and some Smart TVs.
+- **Admin Page** - Upload, rename, and delete files directly in the browser.
+- **RGB LED Controls** - Change colors and patterns remotely.
+- **Improved Web UI** - Cleaner layout and more responsive mobile design.
+- **SD Card Failure Recovery** - Enhanced support for unreliable cards and soft recovery.
+- **Storage Status Display** - View available SD card space on the interface.
+- **Better Video Quality Support** - Preliminary improvements for high-bitrate playback.
+
+Use this branch if you want the latest features and don't mind the occasional rough edge.
+
+---
+
+
 ## What is Nomad
 
 Jcorp Nomad is an open-source offline media server built for travel, remote work, classrooms, camping, and more. It runs entirely on an ESP32-S3 dev board, creates a local Wi-Fi hotspot, and serves media through a browser-accessible interface. It does not require internet access and works similarly to in-flight entertainment systems. It also allows multiple users watching seperate media streams at the same time. 
