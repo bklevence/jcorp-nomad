@@ -18,7 +18,7 @@
 
 // WiFi network name and password (this is the hotspot the ESP32 creates)
 #define WIFI_SSID "Jcorp_Nomad"
-#define WIFI_PASSWORD "password"
+#define WIFI_PASSWORD "Password"
 
 // Max number of devices that can connect at once
 #define MAX_CLIENTS 4
@@ -49,6 +49,13 @@ extern lv_obj_t *ui_wifi;
 extern lv_obj_t *ui_SDcard;
 bool lastWifiStatus = false;
 bool lastSDStatus = false;
+//Globals for SD scan
+unsigned long lastUpdateTime = 0;
+unsigned long lastSDScanTime = 0;
+const unsigned long SD_SCAN_INTERVAL = 60000; // 60 seconds
+uint64_t cachedUsedBytes = 0;
+uint64_t cachedTotalBytes = 0;
+unsigned long lastScanTime = 0;
 // Update the UI with the number of connected users
 void updateUI(int userCount) {
     char buffer[10];
@@ -483,17 +490,65 @@ void createSimpleUploadHandler(const String& mediaFolder, const char* endpoint) 
             }
         }
     );
-}void handleSDInfo(AsyncWebServerRequest *request) {
-    uint64_t totalBytes = SD_MMC.totalBytes();
-    uint64_t usedBytes  = SD_MMC.usedBytes();
+}
+void scanSDCardUsage() {
+    cachedUsedBytes = 0;
+    cachedTotalBytes = SD_MMC.cardSize();
 
+    std::function<void(File)> sumDirectory = [&](File dir) {
+        while (true) {
+            File entry = dir.openNextFile();
+            if (!entry) break;
+
+            if (entry.isDirectory()) {
+                sumDirectory(entry);
+            } else {
+                cachedUsedBytes += entry.size();
+            }
+            entry.close();
+        }
+    };
+
+    File root = SD_MMC.open("/");
+    if (root && root.isDirectory()) {
+        sumDirectory(root);
+        root.close();
+    }
+
+    lastScanTime = millis();
+}
+
+void handleSDInfo(AsyncWebServerRequest *request) {
     DynamicJsonDocument doc(256);
+
+    // Example: Get total and used bytes from SD_MMC or cached values
+    uint64_t totalBytes = cachedTotalBytes > 0 ? cachedTotalBytes : (64ULL * 1024 * 1024 * 1024);
+    uint64_t usedBytes = cachedUsedBytes; // You should update this periodically
+
     doc["total"] = totalBytes;
     doc["used"] = usedBytes;
 
     String output;
     serializeJson(doc, output);
+
     request->send(200, "application/json", output);
+}
+String urlencode(String str) {
+    String encoded = "";
+    char c;
+    char bufHex[4];
+    for (int i = 0; i < str.length(); i++) {
+        c = str.charAt(i);
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '/') {
+            encoded += c;
+        } else if (c == ' ') {
+            encoded += "%20";
+        } else {
+            sprintf(bufHex, "%%%02X", c);
+            encoded += bufHex;
+        }
+    }
+    return encoded;
 }
 
 // ==================== SETUP ====================
@@ -533,6 +588,140 @@ void setup() {
     // Start Captive DNS redirection
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 
+    //.m3u playlist endpoint
+    server.on("/playlist.m3u", HTTP_GET, [](AsyncWebServerRequest *request){
+        String playlist = "#EXTM3U\n";
+    server.on("/nomad.m3u", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // internally call the same code or just redirect
+        request->redirect("/playlist.m3u");
+    });
+
+        // === MOVIES ===
+        playlist += "# === MOVIES ===\n";
+        File movieDir = SD_MMC.open("/Movies");
+        if (movieDir && movieDir.isDirectory()) {
+            File file = movieDir.openNextFile();
+            while (file) {
+                String name = file.name();
+                if (!file.isDirectory() && (name.endsWith(".mp4") || name.endsWith(".mkv"))) {
+                    String fullPath = String("/Movies/") + file.name();
+                    playlist += "#EXTINF:-1," + String(file.name()) + "\n";
+                    playlist += "http://" + WiFi.softAPIP().toString() + "/media?file=" + urlencode(fullPath) + "\n";
+                }
+                file = movieDir.openNextFile();
+            }
+        }
+
+        // === SHOWS ===
+        playlist += "# === SHOWS ===\n";
+        File showsRoot = SD_MMC.open("/Shows");
+        if (showsRoot && showsRoot.isDirectory()) {
+            File showFolder = showsRoot.openNextFile();
+            while (showFolder) {
+                if (showFolder.isDirectory()) {
+                    String showFolderName = String(showFolder.name());  // e.g. "GravityFalls"
+                    String fullShowPath = "/Shows/" + showFolderName;
+
+                    File episodeDir = SD_MMC.open(fullShowPath);
+                    if (episodeDir && episodeDir.isDirectory()) {
+                        File ep = episodeDir.openNextFile();
+                        while (ep) {
+                            String epName = ep.name();
+                            if (!ep.isDirectory() && (epName.endsWith(".mp4") || epName.endsWith(".mkv"))) {
+                                String fullPath = fullShowPath + "/" + epName;
+                                playlist += "#EXTINF:-1," + epName + "\n";
+                                playlist += "http://" + WiFi.softAPIP().toString() + "/media?file=" + urlencode(fullPath) + "\n";
+                            }
+                            ep = episodeDir.openNextFile();
+                        }
+                    }
+                }
+                showFolder = showsRoot.openNextFile();
+            }
+        }
+
+
+        // === MUSIC ===
+        playlist += "# === MUSIC ===\n";
+        File musicDir = SD_MMC.open("/Music");
+        if (musicDir && musicDir.isDirectory()) {
+            File file = musicDir.openNextFile();
+            while (file) {
+                String name = file.name();
+                if (!file.isDirectory() && name.endsWith(".mp3")) {
+                    String fullPath = String("/Music/") + file.name();
+                    playlist += "#EXTINF:-1," + String(file.name()) + "\n";
+                    playlist += "http://" + WiFi.softAPIP().toString() + "/media?file=" + urlencode(fullPath) + "\n";
+                }
+                file = musicDir.openNextFile();
+            }
+        }
+
+        request->send(200, "audio/x-mpegurl", playlist);
+    });
+
+    //fAKE dlna dISCOVERY
+    server.on("/dlna/device.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/xml", R"rawliteral(
+        <?xml version="1.0"?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0">
+          <specVersion>
+            <major>1</major>
+            <minor>0</minor>
+          </specVersion>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+            <friendlyName>Nomad Media Server</friendlyName>
+            <manufacturer>Jcorp</manufacturer>
+            <modelName>Nomad DLNA</modelName>
+            <UDN>uuid:ESP32-DLNA-NOMAD</UDN>
+          </device>
+        </root>
+      )rawliteral");
+    });
+    server.on("/ssdp/device-desc.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/xml", R"rawliteral(
+        <?xml version="1.0"?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0">
+          <specVersion>
+            <major>1</major>
+            <minor>0</minor>
+          </specVersion>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+            <friendlyName>Nomad Media Server</friendlyName>
+            <manufacturer>Jcorp</manufacturer>
+            <modelName>Nomad</modelName>
+            <modelNumber>1</modelNumber>
+            <UDN>uuid:ESP32-DLNA-FAKE-1234</UDN>
+          </device>
+        </root>
+      )rawliteral");
+    });
+    server.on("/dlna/description.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+      request->send(200, "text/xml", R"rawliteral(
+        <?xml version="1.0"?>
+        <root xmlns="urn:schemas-upnp-org:device-1-0">
+          <specVersion>
+            <major>1</major>
+            <minor>0</minor>
+          </specVersion>
+          <device>
+            <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
+            <friendlyName>Nomad Media</friendlyName>
+            <manufacturer>JCorp</manufacturer>
+            <modelName>ESP32-Nomad</modelName>
+            <UDN>uuid:nomad-dlna-esp32</UDN>
+          </device>
+        </root>
+      )rawliteral");
+    });
+    server.on("/description.xml", HTTP_GET, [](AsyncWebServerRequest *request){
+        AsyncWebServerResponse *response = request->beginResponse(302, "text/plain", "");
+        response->addHeader("Application-URL", "http://" + WiFi.softAPIP().toString() + "/dlna/");
+        response->addHeader("Location", "/dlna/desc.xml");  // HTTP redirect target
+        request->send(response);
+    });
 
 
     // Set LED mode: solid (0), rainbow (1), etc.
@@ -604,7 +793,7 @@ void setup() {
                 return;
             }
         }
-        Serial.println("Non-Apple device. Serving index.html");
+        Serial.println("Android device. Serving index.html");
         request->send(SD_MMC, "/index.html", "text/html");
     });
     // Captive triggers for Apple & Android devices
@@ -763,13 +952,19 @@ void loop() {
         RGB_Lamp_Loop(2);
     }
 
-    static unsigned long lastUpdateTime = 0;
+    // Update UI toggle status every second
     if (millis() - lastUpdateTime > 1000) {
         updateToggleStatus();
         lastUpdateTime = millis();
     }
 
-    delay(5);
+    // Scan SD usage in background every 60 seconds
+    if (millis() - lastSDScanTime > SD_SCAN_INTERVAL) {
+        scanSDCardUsage();  // Safe, non-blocking recursive function
+        lastSDScanTime = millis();
+    }
+
+    delay(5); // Prevent watchdog starvation
     updateClientCount();
 }
 
@@ -784,3 +979,4 @@ void RGB_SetMode(uint8_t mode) {
         Set_Color(solidG, solidR, solidB);
     }
 }
+
