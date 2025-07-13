@@ -30,6 +30,7 @@ This branch includes several experimental features not yet available in `main`. 
 - **SD Card Failure Recovery** - Enhanced support for unreliable cards and soft recovery.
 - **Storage Status Display** - View available SD card space on the interface.
 - **Better Video Quality Support** - Preliminary improvements for high-bitrate playback.
+- **SD Card Recovery** Slow or low quality SD cards can have read failures when they get too hot, or too many requsts. Adds recovery function so users shouldnt see this happen on the frontend anymore. 
 
 Use this branch if you want the latest features and don't mind the occasional rough edge.
 
