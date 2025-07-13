@@ -1,5 +1,11 @@
 //Jcorp Nomad Project
 #include "Arduino.h"
+#define FF_USE_FASTSEEK 1
+#define SD_FREQ_KHZ 10000         // ✱✱ VERY IMPORTANT SETTING ✱✱
+                                  // This controls how fast reads from your SD Card can go, If you have a name brand fancy card you can go faster with better results.
+                                  // 10 000 kHz (10 MHz) = safest, ~4 Mb/s
+                                  // 12000 kHz (12 MHz) = good for 2–3 HD streams
+                                  // 20000 kHz (20 MHz) = fastest but may timeout
 #include "WiFi.h"
 #include "ESPAsyncWebServer.h"
 #include "FS.h"
@@ -29,6 +35,23 @@
 #define SD_D1_PIN 18
 #define SD_D2_PIN 17
 #define SD_D3_PIN 21
+
+// ───────────────── SD‑recovery globals ───────────────
+volatile bool sdErrorFlag            = false;      // ✱✱ NEW / RECOVERY ✱✱
+unsigned long sdErrorCooldownUntil   = 0;          // ✱✱ NEW / RECOVERY ✱✱
+
+bool tryRecoverSDCard() {                          // ✱✱ NEW / RECOVERY ✱✱
+    Serial.println("[SD] Attempting recovery…");
+    SD_MMC.end();          // unmount
+    delay(1000);           // give hardware a breather
+
+    if (!SD_MMC.begin("/sdcard", true, false, SD_FREQ_KHZ, 12)) {
+        Serial.println("[SD] Recovery failed.");
+        return false;
+    }
+    Serial.println("[SD] Recovery OK.");
+    return true;
+}
 
 String rfc3339Now() {
   return "2025-07-12T12:00:00Z";  // Hard-coded UTC timestamp
@@ -79,7 +102,7 @@ void updateToggleStatus() {
         lastWifiStatus = currentWifiStatus;
     }
 
-    bool currentSDStatus = SD_MMC.cardType() != CARD_NONE && SD_MMC.begin("/sdcard", true);
+bool currentSDStatus = SD_MMC.cardType() != CARD_NONE;   // ✱✱ NEW / CHANGED ✱✱
     if (currentSDStatus != lastSDStatus) {
         if (currentSDStatus) {
             lv_obj_add_state(ui_SDcard, LV_STATE_CHECKED);
@@ -388,6 +411,8 @@ void handleOPDSBooks(AsyncWebServerRequest *request) {
 // ==================== MEDIA STREAM HANDLER ====================
 // Handles video/audio streaming via range requests
 void handleRangeRequest(AsyncWebServerRequest *request) {
+
+    /* ----- validate path ----- */
     if (!request->hasParam("file")) {
         request->send(400, "text/plain", "File parameter missing");
         return;
@@ -399,23 +424,36 @@ void handleRangeRequest(AsyncWebServerRequest *request) {
         return;
     }
 
+    /* ----- open file with recovery guard ----- */
     File file = SD_MMC.open(filePath, "r");
+    if (!file) {                                              // ✱✱ NEW / RECOVERY ✱✱
+        Serial.println("[SD] open() failed — trigger recovery");
+        sdErrorFlag            = true;                        // flag main loop
+        sdErrorCooldownUntil   = millis() + 5000;            // pause 5 s
+        request->send(503, "text/plain",
+                      "SD error — retrying shortly");        // browser will auto‑retry
+        return;
+    }
+
     size_t fileSize = file.size();
 
+    /* ----- debug ----- */
     Serial.println("=== Range Request Debug ===");
     Serial.println("File requested: " + filePath);
     Serial.println("File size: " + String(fileSize));
 
+    /* ----- HEAD support ----- */
     if (request->method() == HTTP_HEAD) {
         Serial.println("HEAD request received");
-        AsyncWebServerResponse *headResponse = request->beginResponse(200, "application/octet-stream", "");
+        AsyncWebServerResponse *headResponse =
+            request->beginResponse(200, "application/octet-stream", "");
         headResponse->addHeader("Content-Length", String(fileSize));
         request->send(headResponse);
         file.close();
         return;
     }
 
-    // Handle "Range" header to support seeking and chunked media playback
+    /* ----- parse Range header ----- */
     String rangeHeader = request->header("Range");
     Serial.println("Raw Range header: " + rangeHeader);
 
@@ -435,19 +473,35 @@ void handleRangeRequest(AsyncWebServerRequest *request) {
     Serial.println("Content length: " + String(contentLength));
     Serial.println("============================");
 
-    AsyncWebServerResponse *response = request->beginResponse("video/mp4", contentLength,
-        [file, startByte, endByte, contentLength](uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
+    /* ----- create async response ----- */
+    AsyncWebServerResponse *response =
+        request->beginResponse("video/mp4", contentLength,
+        /* capture globals by reference so we can set the flag inside */
+        [&, file, startByte, endByte, contentLength]
+        (uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
+
+            /* seek & read */
             file.seek(startByte + index);
             size_t bytesToRead = min(maxLen, endByte - (startByte + index) + 1);
-            size_t bytesRead = file.read(buffer, bytesToRead);
+            size_t bytesRead   = file.read(buffer, bytesToRead);
+
+            /* ----- detect read failure ----- */
+            if (bytesRead == 0) {                               
+                Serial.println("[SD] read() failed — recovery");
+                file.close();
+                sdErrorFlag          = true;
+                sdErrorCooldownUntil = millis() + 5000;
+                return 0;               // aborts this chunk; client retries
+            }
+
+            /* close when finished */
             if (index + bytesRead >= contentLength) {
                 file.close();
             }
             return bytesRead;
-        }
-    );
+        });
 
-    response->addHeader("Content-Type", "video/mp4");
+ 
     response->addHeader("Accept-Ranges", "bytes");
     response->addHeader("Content-Range", "bytes " + String(startByte) + "-" + String(endByte) + "/" + String(fileSize));
     response->addHeader("Cache-Control", "no-cache");
@@ -727,7 +781,11 @@ void setup() {
         Serial.println("ERROR: SDMMC Pin configuration failed!");
         return;
     }
-    if (!SD_MMC.begin("/sdcard", true)) {
+    if (!SD_MMC.begin("/sdcard",          // mount point
+                      true,               // 1-bit mode
+                      false,              // no format if fail
+                      SDMMC_FREQ_DEFAULT, // bus frequency
+                      12)) {              // ✱✱ NEW: raise file descriptor limit
         Serial.println("ERROR: SDMMC Card initialization failed.");
         return;
     }
@@ -1000,7 +1058,7 @@ void setup() {
           <device>
             <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
             <friendlyName>Nomad Media</friendlyName>
-            <manufacturer>JCorp</manufacturer>
+            <manufacturer>Jcorp</manufacturer>
             <modelName>ESP32-Nomad</modelName>
             <UDN>uuid:nomad-dlna-esp32</UDN>
           </device>
@@ -1257,7 +1315,14 @@ void loop() {
     if (currentLEDMode == 1) {
         RGB_Lamp_Loop(2);
     }
-
+    if (sdErrorFlag) {                                             // ✱✱ NEW / RECOVERY ✱✱
+        if (millis() > sdErrorCooldownUntil && tryRecoverSDCard()) {
+            sdErrorFlag = false;  // we’re back in business
+        } else {
+            delay(5);  // keep feeding WDT while waiting
+            return;    // skip rest of loop until recovery works
+        }
+    }
     // Update UI toggle status every second
     if (millis() - lastUpdateTime > 1000) {
         updateToggleStatus();
@@ -1285,4 +1350,3 @@ void RGB_SetMode(uint8_t mode) {
         Set_Color(solidG, solidR, solidB);
     }
 }
-

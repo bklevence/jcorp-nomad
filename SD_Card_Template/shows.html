@@ -161,7 +161,60 @@
     function closeVideo(){videoPlayer.pause();videoPlayer.src='';videoPlayer.load();videoModal.style.display='none';}
     nextBtn.onclick=()=>playEpisode(currentEpIdx+1);
     videoPlayer.addEventListener('ended',()=>playEpisode(currentEpIdx+1));
+(function addVideoRecoveryLogic() {
+  const MAX_RETRIES = 5;
+  let retries = 0;
+  let lastTime = 0;
+  let freezeTimer;
 
+  function refreshStream() {
+    if (retries >= MAX_RETRIES) return;
+    retries++;
+    console.log(`[Nomad] Stream stalled → retry ${retries}`);
+    const t = videoPlayer.currentTime || 0;
+
+    const src = videoPlayer.querySelector('source');
+    if (!src) {
+      const newSource = document.createElement('source');
+      newSource.type = 'video/mp4';
+      videoPlayer.appendChild(newSource);
+    }
+
+    const current = src?.getAttribute('src') || videoPlayer.src;
+    const base = src?.getAttribute('data-base') || current;
+    if (src) {
+      src.setAttribute('data-base', base);
+      src.src = `${base}${base.includes('?') ? '&' : '?'}ts=${Date.now()}`;
+    } else {
+      videoPlayer.src = `${base}${base.includes('?') ? '&' : '?'}ts=${Date.now()}`;
+    }
+
+    videoPlayer.load();
+    videoPlayer.currentTime = Math.max(t - 0.01, 0);
+    videoPlayer.play().catch(()=>{});
+  }
+
+  videoPlayer.addEventListener('stalled', refreshStream);
+  videoPlayer.addEventListener('error', refreshStream);
+  videoPlayer.addEventListener('waiting', () => {
+    setTimeout(() => {
+      if (videoPlayer.readyState < 3) refreshStream();
+    }, 1000);
+  });
+
+  function startWatchdog() {
+    clearInterval(freezeTimer);
+    freezeTimer = setInterval(() => {
+      if (!videoPlayer.paused && videoPlayer.readyState < 3) {
+        if (videoPlayer.currentTime === lastTime) refreshStream();
+      }
+      lastTime = videoPlayer.currentTime;
+    }, 2000);
+  }
+
+  videoPlayer.addEventListener('playing', () => { retries = 0; startWatchdog(); });
+  videoPlayer.addEventListener('pause', () => clearInterval(freezeTimer));
+})();
   </script>
 </body>
 </html>

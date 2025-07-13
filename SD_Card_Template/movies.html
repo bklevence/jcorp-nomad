@@ -150,6 +150,50 @@
         searchInput.addEventListener('input',e=>{clearTimeout(debounceTimer);debounceTimer=setTimeout(()=>applyFilter(e.target.value),150);});
         sortSelect.addEventListener('change',()=>applySort(sortSelect.value));
         videoPlayer.addEventListener('ended',closeVideo);
+document.querySelectorAll('video').forEach(player => {
+  const MAX_RETRIES = 5;
+  let retries = 0;
+  let lastTime = 0;
+  let freezeTimer;
+
+  function refreshStream() {
+    if (retries >= MAX_RETRIES) return;
+    retries++;
+    console.log(`[Nomad] Stream stalled → retry ${retries}`);
+    const t = player.currentTime || 0;
+
+    const src = player.querySelector('source');
+    const base = src.getAttribute('data-base') || src.src;
+    src.setAttribute('data-base', base);
+    src.src = `${base}${base.includes('?') ? '&' : '?'}ts=${Date.now()}`;
+
+    player.load();
+    player.currentTime = Math.max(t - 0.01, 0);
+    player.play().catch(()=>{});
+  }
+
+  player.addEventListener('stalled',  refreshStream);
+  player.addEventListener('error',    refreshStream);
+  player.addEventListener('waiting',  () => {
+    setTimeout(() => {
+      if (player.readyState < 3) refreshStream();
+    }, 1000);
+  });
+
+  function startWatchdog() {
+    clearInterval(freezeTimer);
+    freezeTimer = setInterval(() => {
+      if (!player.paused && player.readyState < 3) {
+        if (player.currentTime === lastTime) refreshStream();
+      }
+      lastTime = player.currentTime;
+    }, 2000);
+  }
+
+  player.addEventListener('playing', () => { retries = 0; startWatchdog(); });
+  player.addEventListener('pause',   ()  => clearInterval(freezeTimer));
+  startWatchdog();
+});
         init();
     </script>
 </body>
