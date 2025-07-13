@@ -27,7 +27,6 @@ This branch includes several experimental features not yet available in `main`. 
 - **Admin Page** - Upload, rename, and delete files directly in the browser.
 - **RGB LED Controls** - Change colors and patterns remotely.
 - **Improved Web UI** - Cleaner layout and more responsive mobile design.
-- **SD Card Failure Recovery** - Enhanced support for unreliable cards and soft recovery.
 - **Storage Status Display** - View available SD card space on the interface.
 - **Better Video Quality Support** - Preliminary improvements for high-bitrate playback.
 - **SD Card Recovery** Slow or low quality SD cards can have read failures when they get too hot, or too many requsts. Adds recovery function so users shouldnt see this happen on the frontend anymore. 
