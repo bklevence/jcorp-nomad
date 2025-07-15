@@ -2,10 +2,10 @@
 #include "Arduino.h"
 #define FF_USE_FASTSEEK 1
 #define SD_FREQ_KHZ 10000         // ✱✱ VERY IMPORTANT SETTING ✱✱
-                                  // This controls how fast reads from your SD Card can go, If you have a name brand fancy card you can go faster with better results.
-                                  // 10 000 kHz (10 MHz) = safest, ~4 Mb/s
-                                  // 12000 kHz (12 MHz) = good for 2–3 HD streams
-                                  // 20000 kHz (20 MHz) = fastest but may timeout
+                                  // This controls how fast reads from your SD Card can go, If you have a name brand fancy card you can go faster with better results. Check what your card recomends. 
+                                  // 10 000 kHz (10 MHz) = safest 
+                                  // 12000 kHz (12 MHz) = good 
+                                  // 20000 kHz (20 MHz) = fastest 
 #include "WiFi.h"
 #include "ESPAsyncWebServer.h"
 #include "FS.h"
@@ -25,9 +25,13 @@
 // WiFi network name and password (this is the hotspot the ESP32 creates)
 #define WIFI_SSID "Jcorp_Nomad"
 #define WIFI_PASSWORD "Password"
-
+//Auto Generate Media.json?
+//generate media.json every time the device boots?
+bool AUTO_GENERATE_MEDIA_JSON = false; //True generates on boot, False only generate when you request it in the admin panel
 // Max number of devices that can connect at once
-#define MAX_CLIENTS 4
+#define MAX_CLIENTS 4 // I recomend 4, If you want to try more knock yourself out!
+
+// =================== scary config ====================
 // SD card pinout for Waveshare ESP32-S3
 #define SD_CLK_PIN 14
 #define SD_CMD_PIN 15
@@ -37,10 +41,10 @@
 #define SD_D3_PIN 21
 
 // ───────────────── SD‑recovery globals ───────────────
-volatile bool sdErrorFlag            = false;      // ✱✱ NEW / RECOVERY ✱✱
-unsigned long sdErrorCooldownUntil   = 0;          // ✱✱ NEW / RECOVERY ✱✱
+volatile bool sdErrorFlag            = false;      
+unsigned long sdErrorCooldownUntil   = 0;          
 
-bool tryRecoverSDCard() {                          // ✱✱ NEW / RECOVERY ✱✱
+bool tryRecoverSDCard() {                          
     Serial.println("[SD] Attempting recovery…");
     SD_MMC.end();          // unmount
     delay(1000);           // give hardware a breather
@@ -54,7 +58,7 @@ bool tryRecoverSDCard() {                          // ✱✱ NEW / RECOVERY ✱�
 }
 
 String rfc3339Now() {
-  return "2025-07-12T12:00:00Z";  // Hard-coded UTC timestamp
+  return "2025-07-12T12:00:00Z";  // Hard-coded UTC timestamp, or it gets mad
 }
 
 // Captive portal DNS setup
@@ -88,7 +92,7 @@ unsigned long lastScanTime = 0;
 void updateUI(int userCount) {
     char buffer[10];
     snprintf(buffer, sizeof(buffer), "%d", userCount);
-    lv_label_set_text(ui_uiuserlabel, buffer);
+    lv_label_set_text(ui_userlabel, buffer);
 }
 void updateToggleStatus() {
     bool currentWifiStatus = WiFi.softAPIP();
@@ -759,6 +763,17 @@ String urlencode(String str) {
     }
     return encoded;
 }
+void updateSDBAR() {
+    uint64_t totalBytes = SD_MMC.totalBytes();
+    uint64_t usedBytes = SD_MMC.usedBytes();
+
+  if (totalBytes > 0) {
+    int usage = (usedBytes * 100) / totalBytes;
+    lv_bar_set_value(ui_sdbar, usage, LV_ANIM_OFF);
+  } else {
+    lv_bar_set_value(ui_sdbar, 0, LV_ANIM_OFF);
+  }
+}
 
 // ==================== SETUP ====================
 
@@ -774,7 +789,7 @@ void setup() {
     // Start WiFi Access Point
     WiFi.softAP(WIFI_SSID, WIFI_PASSWORD);
     Serial.println("WiFi AP started...");
-
+    lv_label_set_text(ui_ssidlabel, WIFI_SSID);
     // Initialize SD card
     Serial.println("Initializing SD Card...");
     if (!SD_MMC.setPins(SD_CLK_PIN, SD_CMD_PIN, SD_D0_PIN, SD_D1_PIN, SD_D2_PIN, SD_D3_PIN)) {
@@ -790,13 +805,16 @@ void setup() {
         return;
     }
     Serial.println("SD Card initialized successfully!");
+    updateSDBAR();
     createSimpleUploadHandler("Movies", "/upload-movie");
     createSimpleUploadHandler("Music", "/upload-music");
     createSimpleUploadHandler("Books", "/upload-book");
 
     delay(2000); 
 
-    generateMediaJSON();  
+    if (AUTO_GENERATE_MEDIA_JSON) { //Only run if autogen is set to true.
+        generateMediaJSON();
+    } 
 
     // Start Captive DNS redirection
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
@@ -1295,15 +1313,15 @@ server.on("/mkdir", HTTP_POST, [](AsyncWebServerRequest *request){
     } else {
         request->send(500, "text/plain", "Failed to create directory");
     }
-});
+    });
 
 static std::map<AsyncWebServerRequest*, String> uploadPaths;
 server.on("/rename", HTTP_POST, handleRename);
 server.on("/delete", HTTP_POST, handleDelete);
-    // Start the web server
-    server.begin();
-    updateToggleStatus(); // Reflect initial WiFi and SD status
-    Serial.println("Web Server started!");
+// Start the web server
+server.begin();
+updateToggleStatus(); // Reflect initial WiFi and SD status
+Serial.println("Web Server started!");
 }
 
 // ==================== MAIN LOOP ====================
@@ -1333,6 +1351,7 @@ void loop() {
     if (millis() - lastSDScanTime > SD_SCAN_INTERVAL) {
         scanSDCardUsage();  // Safe, non-blocking recursive function
         lastSDScanTime = millis();
+        
     }
 
     delay(5); // Prevent watchdog starvation
