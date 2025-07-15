@@ -30,6 +30,7 @@ This branch includes several experimental features not yet available in `main`. 
 - **Storage Status Display** - View available SD card space on the interface.
 - **Better Video Quality Support** - Preliminary improvements for high-bitrate playback.
 - **SD Card Recovery** Slow or low quality SD cards can have read failures when they get too hot, or too many requsts. Adds recovery function so users shouldnt see this happen on the frontend anymore. 
+- **UI Updates** Squareline studio files are in /docs, you can use it to customize the LCD display. I also made it so the SSID actualy reflects the one in settings automaticaly. Finaly the bar at the top of the screen shows how full the SD card is!
 
 Use this branch if you want the latest features and don't mind the occasional rough edge.
 
