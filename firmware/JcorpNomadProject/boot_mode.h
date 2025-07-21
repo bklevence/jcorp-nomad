@@ -13,10 +13,6 @@
 static constexpr const char* BOOT_NS  = "boot";
 static constexpr const char* BOOT_KEY = "mode";
 
-/**
- * Persist the next boot mode into flash (NVS).
- * Does NOT restart the MCU; caller should call esp_restart().
- */
 static inline void set_boot_mode(int mode) {
   Preferences prefs;
   if (prefs.begin(BOOT_NS, false)) {
@@ -25,10 +21,6 @@ static inline void set_boot_mode(int mode) {
   }
 }
 
-/**
- * Read the scheduled boot mode from flash (NVS).
- * Defaults to MEDIA_MODE if unset.
- */
 static inline int get_boot_mode() {
   Preferences prefs;
   uint8_t mode = MEDIA_MODE;
@@ -39,10 +31,6 @@ static inline int get_boot_mode() {
   return mode;
 }
 
-/**
- * Reset the stored mode back to MEDIA_MODE.
- * Useful to clear the flag when entering USB mode.
- */
 static inline void clear_boot_mode() {
   set_boot_mode(MEDIA_MODE);
 }
