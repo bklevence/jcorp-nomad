@@ -58,7 +58,7 @@ static void usbEventCallback(void*, esp_event_base_t event_base,
   if (event_base == ARDUINO_USB_EVENTS) {
     switch (event_id) {
       case ARDUINO_USB_STOPPED_EVENT:
-        // Host ejected the drive → switch back to Media on next boot
+        // Host ejected the drive > switch back to Media on next boot
         set_boot_mode(MEDIA_MODE);
         esp_restart();
         break;
@@ -100,7 +100,6 @@ void usb_setup() {
 void usb_loop() {
   delay(0);  // avoid watchdog
 
-  // If BOOT button held, reboot into Media mode
   if (digitalRead(BOOT_BUTTON_PIN) == LOW) {
     set_boot_mode(MEDIA_MODE);
     esp_restart();
