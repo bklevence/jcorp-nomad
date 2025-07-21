@@ -19,7 +19,21 @@
 #include "RGB_lamp.h"
 #include <SPIFFS.h>
 #include "esp_wifi.h"
+#include "usb_mode.h"
+#include "boot_mode.h" // custom library for firmware switching
+void launch_usb_mode() {
+extern void usb_setup();
+extern void usb_loop();
+  // Initialize only the USB‑MSC path
+  usb_setup();
 
+  // Then run only that path forever
+  for (;;) {
+    usb_loop();
+    // optionally: delay(0); yield();
+  }
+}
+#define BOOT_BUTTON_PIN 0  
 // ==================== CONFIGURATION ====================
 
 // WiFi network name and password (this is the hotspot the ESP32 creates)
@@ -774,48 +788,60 @@ void updateSDBAR() {
     lv_bar_set_value(ui_sdbar, 0, LV_ANIM_OFF);
   }
 }
-
-// ==================== SETUP ====================
-
+// ------------- Main Setup -------------------
 void setup() {
+    pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
+
+    if (get_boot_mode() == USB_MODE) {
+      clear_boot_mode();    // <<< reset so next boot goes back to MEDIA
+      Serial.begin(115200);
+      delay(500);
+      Serial.println(">>> USB mode: mounting SD & starting MSC");
+      launch_usb_mode();
+      return;
+    }
+
     LCD_Init();
     Lvgl_Init();
-    Set_Backlight(90); // Set display brightness
-    ui_init();         // Load the GUI
-    
+    Set_Backlight(90);
+    ui_init();
+
     Serial.begin(115200);
     delay(1000);
     Serial.println("\n=== ESP32-S3 Captive Portal & SDMMC Server ===");
+
     // Start WiFi Access Point
     WiFi.softAP(WIFI_SSID, WIFI_PASSWORD);
     Serial.println("WiFi AP started...");
     lv_label_set_text(ui_ssidlabel, WIFI_SSID);
+
     // Initialize SD card
     Serial.println("Initializing SD Card...");
     if (!SD_MMC.setPins(SD_CLK_PIN, SD_CMD_PIN, SD_D0_PIN, SD_D1_PIN, SD_D2_PIN, SD_D3_PIN)) {
         Serial.println("ERROR: SDMMC Pin configuration failed!");
         return;
     }
-    if (!SD_MMC.begin("/sdcard",          // mount point
-                      true,               // 1-bit mode
-                      false,              // no format if fail
-                      SDMMC_FREQ_DEFAULT, // bus frequency
-                      12)) {              // ✱✱ NEW: raise file descriptor limit
+
+    if (!SD_MMC.begin("/sdcard", true, false, SDMMC_FREQ_DEFAULT, 12)) {
         Serial.println("ERROR: SDMMC Card initialization failed.");
         return;
     }
+
     Serial.println("SD Card initialized successfully!");
     updateSDBAR();
     createSimpleUploadHandler("Movies", "/upload-movie");
     createSimpleUploadHandler("Music", "/upload-music");
     createSimpleUploadHandler("Books", "/upload-book");
 
-    delay(2000); 
+    delay(2000);
 
-    if (AUTO_GENERATE_MEDIA_JSON) { //Only run if autogen is set to true.
+    if (AUTO_GENERATE_MEDIA_JSON) {
         generateMediaJSON();
-    } 
-
+    }
+    attachInterrupt(BOOT_BUTTON_PIN, [](){
+      set_boot_mode(USB_MODE);
+      esp_restart();
+    }, FALLING);
     // Start Captive DNS redirection
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
     //OPDS Endpoint
@@ -1318,6 +1344,11 @@ server.on("/mkdir", HTTP_POST, [](AsyncWebServerRequest *request){
 static std::map<AsyncWebServerRequest*, String> uploadPaths;
 server.on("/rename", HTTP_POST, handleRename);
 server.on("/delete", HTTP_POST, handleDelete);
+// ─── USB‑mode switch: jump to USB MSC on Boot‑button press ───
+attachInterrupt(BOOT_BUTTON_PIN, [](){
+  set_boot_mode(USB_MODE);
+  esp_restart();            // actually reboot into USB mode
+}, FALLING);
 // Start the web server
 server.begin();
 updateToggleStatus(); // Reflect initial WiFi and SD status
