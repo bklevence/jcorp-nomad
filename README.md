@@ -31,6 +31,7 @@ This branch includes several experimental features not yet available in `main`. 
 - **Better Video Quality Support** - Preliminary improvements for high-bitrate playback.
 - **SD Card Recovery** Slow or low quality SD cards can have read failures when they get too hot, or too many requsts. Adds recovery function so users shouldnt see this happen on the frontend anymore. 
 - **UI Updates** Squareline studio files are in /docs, you can use it to customize the LCD display. I also made it so the SSID actualy reflects the one in settings automaticaly. Finaly the bar at the top of the screen shows how full the SD card is!
+- **UBS MSC Mode** - Allows users to click the "boot" button and have the device switch into USB mode. This shuts down the webserver and mounts it via usb as a mass storage device. Its slow, but more reliable than the web server wireless method. expect 355mb/s-700mb/s for now. 
 
 Use this branch if you want the latest features and don't mind the occasional rough edge.
 
