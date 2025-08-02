@@ -18,6 +18,7 @@ lv_obj_t * ui_Image1 = NULL;
 lv_obj_t * ui_Image2 = NULL;
 lv_obj_t * ui_Image3 = NULL;
 lv_obj_t * ui_userlabel = NULL;
+lv_obj_t * ui_MediaGen = NULL;
 // event funtions
 
 // build funtions
@@ -136,6 +137,14 @@ void ui_Screen1_screen_init(void)
     lv_label_set_text(ui_userlabel, "0");
     lv_obj_set_style_text_font(ui_userlabel, &ui_font_Font2, LV_PART_MAIN | LV_STATE_DEFAULT);
 
+    ui_MediaGen = lv_textarea_create(ui_Screen1);
+    lv_obj_set_width(ui_MediaGen, 170);
+    lv_obj_set_height(ui_MediaGen, 315);
+    lv_obj_set_align(ui_MediaGen, LV_ALIGN_CENTER);
+    lv_textarea_set_placeholder_text(ui_MediaGen, "Starting....");
+    lv_obj_add_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);     /// Flags
+    lv_obj_set_style_text_font(ui_MediaGen, &ui_font_Font1, LV_PART_MAIN | LV_STATE_DEFAULT);
+
 }
 
 void ui_Screen1_screen_destroy(void)
@@ -156,5 +165,6 @@ void ui_Screen1_screen_destroy(void)
     ui_Image2 = NULL;
     ui_Image3 = NULL;
     ui_userlabel = NULL;
+    ui_MediaGen = NULL;
 
 }

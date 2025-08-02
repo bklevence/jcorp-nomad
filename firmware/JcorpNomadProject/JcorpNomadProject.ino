@@ -18,6 +18,7 @@
 #include "ui.h"
 #include "RGB_lamp.h"
 #include <SPIFFS.h>
+#include <Preferences.h>
 #include "esp_wifi.h"
 #include "usb_mode.h"
 #include "boot_mode.h" // custom library for firmware switching
@@ -34,17 +35,25 @@ extern void usb_loop();
   }
 }
 #define BOOT_BUTTON_PIN 0  
+int screenBrightness = 100; // 0-100, default full brightness
+void handleConnector(AsyncWebServerRequest *request);
 // ==================== CONFIGURATION ====================
 
-// WiFi network name and password (this is the hotspot the ESP32 creates)
-#define WIFI_SSID "Jcorp_Nomad"
-#define WIFI_PASSWORD "Password"
-//Auto Generate Media.json?
-//generate media.json every time the device boots?
-bool AUTO_GENERATE_MEDIA_JSON = false; //True generates on boot, False only generate when you request it in the admin panel
 // Max number of devices that can connect at once
 #define MAX_CLIENTS 4 // I recomend 4, If you want to try more knock yourself out!
 
+struct AdminSettings {
+  String rgbMode = "off";
+  String rgbColor = "#ff0000";
+  String adminPassword = "";
+  String wifiSSID = "Jcorp_Nomad";
+  String wifiPassword = "password";
+  int brightness = 230;
+  bool autoGenerateMedia = false;
+};
+
+AdminSettings settings;
+const char* SETTINGS_PATH = "/config/settings.json";
 // =================== scary config ====================
 // SD card pinout for Waveshare ESP32-S3
 #define SD_CLK_PIN 14
@@ -53,6 +62,135 @@ bool AUTO_GENERATE_MEDIA_JSON = false; //True generates on boot, False only gene
 #define SD_D1_PIN 18
 #define SD_D2_PIN 17
 #define SD_D3_PIN 21
+// ---------------URL Encode -------------
+String urlencode(String str) {
+  String encoded = "";
+  char c;
+  char code0, code1;
+  char code[] = "0123456789ABCDEF";
+
+  for (int i = 0; i < str.length(); i++) {
+    c = str.charAt(i);
+    if (isalnum(c)) {
+      encoded += c;
+    } else {
+      code0 = code[(c >> 4) & 0xF];
+      code1 = code[c & 0xF];
+      encoded += '%';
+      encoded += code0;
+      encoded += code1;
+    }
+  }
+  return encoded;
+}
+// Settings Setup:
+bool loadSettings() {
+  if (!SD_MMC.exists(SETTINGS_PATH)) {
+    Serial.println("Settings file not found. Generating default.");
+    return saveSettings();  // Save defaults
+  }
+
+  File file = SD_MMC.open(SETTINGS_PATH);
+  if (!file || file.isDirectory()) {
+    Serial.println("Failed to open settings file.");
+    return false;
+  }
+
+  StaticJsonDocument<512> doc;
+  DeserializationError error = deserializeJson(doc, file);
+  file.close();
+
+  if (error) {
+    Serial.println("Failed to parse settings JSON.");
+    return false;
+  }
+
+  settings.rgbMode = doc["rgbMode"] | "off";
+  settings.rgbColor = doc["rgbColor"] | "#ff0000";
+  settings.adminPassword = doc["adminPassword"] | "";
+  settings.wifiSSID = doc["wifiSSID"] | "Jcorp_Nomad";
+  settings.wifiPassword = doc["wifiPassword"] | "password";
+  settings.brightness = doc["brightness"] | 230;
+  settings.autoGenerateMedia = doc["autoGenerateMedia"] | false;
+
+  return true;
+}
+bool saveSettings() {
+  SD_MMC.mkdir("/config"); // Ensure directory exists
+
+  File file = SD_MMC.open(SETTINGS_PATH, FILE_WRITE);
+  if (!file) {
+    Serial.println("Failed to open settings file for writing.");
+    return false;
+  }
+
+  StaticJsonDocument<512> doc;
+  doc["rgbMode"] = settings.rgbMode;
+  doc["rgbColor"] = settings.rgbColor;
+  doc["adminPassword"] = settings.adminPassword;
+  doc["wifiSSID"] = settings.wifiSSID;
+  doc["wifiPassword"] = settings.wifiPassword;
+  doc["brightness"] = settings.brightness;
+  doc["autoGenerateMedia"] = settings.autoGenerateMedia;
+
+  bool success = serializeJson(doc, file) > 0;
+  file.close();
+  return success;
+}
+
+// --------------- Media Generation Stuff ------------
+bool isAlwaysGenerateEnabled() {
+    return SD_MMC.exists("/always_generate.flag");
+}
+
+void enableAlwaysGenerate() {
+    File f = SD_MMC.open("/always_generate.flag", FILE_WRITE);
+    if (f) {
+        f.print("1");
+        f.close();
+    }
+}
+
+void disableAlwaysGenerate() {
+    SD_MMC.remove("/always_generate.flag");
+}
+
+bool isOneTimeGenerateRequested() {
+    return SD_MMC.exists("/generate_once.flag");
+}
+
+void requestOneTimeGenerate() {
+    File f = SD_MMC.open("/generate_once.flag", FILE_WRITE);
+    if (f) {
+        f.print("1");
+        f.close();
+    }
+}
+
+void clearOneTimeGenerate() {
+    SD_MMC.remove("/generate_once.flag");
+}
+//------------------- delete recursive for admin -------------
+bool deleteRecursive(String path) {
+  File entry = SD_MMC.open(path);
+  if (!entry) return false;
+
+  if (!entry.isDirectory()) {
+    entry.close();
+    return SD_MMC.remove(path);
+  }
+
+  File child;
+  while ((child = entry.openNextFile())) {
+    String childPath = String(path) + "/" + child.name();
+    deleteRecursive(childPath);
+    child.close();
+  }
+
+  entry.close();
+  return SD_MMC.rmdir(path);
+}
+
 
 // ───────────────── SD‑recovery globals ───────────────
 volatile bool sdErrorFlag            = false;      
@@ -168,138 +306,369 @@ void updateClientCount() {
         updateUI(connectedClients);
     }
 }
+// Utility: check if file has a valid extension
+bool isValidExtension(const String& name, const std::vector<String>& exts) {
+    for (const auto& ext : exts) {
+        if (name.endsWith(ext)) return true;
+    }
+    return false;
+}
+
+// Utility: extract base name (no path, no extension)
+String getFileBaseName(const String& name) {
+    String base = name.substring(name.lastIndexOf('/') + 1);
+    int dotIndex = base.lastIndexOf('.');
+    if (dotIndex != -1) base = base.substring(0, dotIndex);
+    return base;
+}
+
 void generateMediaJSON() {
-    Serial.println("[MediaGen] Called generateMediaJSON()");
+  // ─── 1) Open the JSON file ───
+  File jsonFile = SD_MMC.open("/media.json", FILE_WRITE);
+  if (!jsonFile) {
+    Serial.println("[MediaGen] ERROR: cannot open media.json for writing");
+    return;
+  }
 
-    if (SD_MMC.exists("/media.json")) {
-        SD_MMC.remove("/media.json");
-        Serial.println("[MediaGen] Old media.json removed.");
+  // ─── 2) Write opening brace ───
+  jsonFile.println("{");
+
+  // ─── 3) Prepare & show the MediaGen screen ───
+  lv_obj_clear_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
+  String logBuf;
+  int   logCount = 0;
+  const int LOG_UPDATE_INTERVAL = 20;
+
+  logBuf = "⏳ Generating media.json...\n";
+  Serial.println("[MediaGen] Starting media.json generation");
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_timer_handler();
+
+  // ─── 4) Movies ───
+  jsonFile.println("  \"movies\": [");
+  File moviesDir = SD_MMC.open("/Movies");
+  bool firstMovie = true;
+  std::vector<String> movieExts = { ".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".wmv" };
+  while (File file = moviesDir.openNextFile()) {
+    yield();
+    if (!file.isDirectory() && isValidExtension(file.name(), movieExts)) {
+      if (!firstMovie) jsonFile.println(",");
+      firstMovie = false;
+      String nameStr = file.name();
+      String base    = getFileBaseName(nameStr);
+      String ext     = nameStr.substring(nameStr.lastIndexOf('.'));
+      String cover   = SD_MMC.exists("/Movies/" + base + ".jpg")
+                       ? "movies/" + base + ".jpg"
+                       : "placeholder.jpg";
+
+      jsonFile.print("    { \"name\": \"" + base +
+                     "\", \"cover\": \"" + cover +
+                     "\", \"file\": \"Movies/" + base + ext + "\" }");
+
+      // buffer log
+      logBuf += "- " + nameStr + "\n";
+      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+        lv_timer_handler();
+      }
     }
+  }
+  jsonFile.println();
+  jsonFile.println("  ],");
 
-    StaticJsonDocument<32768> doc;
+  // ─── Movies complete: flush & clear ───
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+  lv_timer_handler();
+  delay(100);
+  logBuf = "";
+  logCount = 0;
 
-    // Movies
-    JsonArray movies = doc.createNestedArray("movies");
-    File moviesDir = SD_MMC.open("/Movies");
-    while (File file = moviesDir.openNextFile()) {
-        if (!file.isDirectory()) {
-            String name = file.name();
-            if (name.endsWith(".mp4") || name.endsWith(".mkv")) {
-                Serial.println("[MediaGen] Found movie: " + name);
-                String base = name.substring(name.lastIndexOf('/') + 1);
-                base = base.substring(0, base.lastIndexOf('.'));
+  // ─── 5) Shows ───
+  jsonFile.println("  \"shows\": [");
+  File showsRoot = SD_MMC.open("/Shows");
+  bool firstShow = true;
+  while (File folder = showsRoot.openNextFile()) {
+    yield();
+    if (folder.isDirectory()) {
+      if (!firstShow) jsonFile.println(",");
+      firstShow = false;
+      String folderName = folder.name();
+      String coverPath  = SD_MMC.exists("/Shows/" + folderName + ".jpg")
+                          ? "shows/" + folderName + ".jpg"
+                          : "placeholder.jpg";
 
-                String cover = "movies/" + base + ".jpg";
-                if (!SD_MMC.exists("/Movies/" + base + ".jpg")) {
-                    cover = "placeholder.jpg";
-                }
+      jsonFile.println("    {\"name\": \"" + folderName +
+                       "\", \"cover\": \"" + coverPath +
+                       "\", \"episodes\": [");
 
-                JsonObject item = movies.createNestedObject();
-                item["name"] = base;
-                item["cover"] = cover;
-                item["file"] = "Movies/" + base + name.substring(name.lastIndexOf('.'));  // Ensure full filename
-            }
+      logBuf += "\n🎬 " + folderName + "\n";
+      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+        lv_timer_handler();
+      }
+
+      File epFolder = SD_MMC.open("/Shows/" + folderName);
+      bool firstEp = true;
+      while (File ep = epFolder.openNextFile()) {
+        yield();
+        if (!ep.isDirectory() && isValidExtension(ep.name(), movieExts)) {
+          if (!firstEp) jsonFile.println(",");
+          firstEp = false;
+          String epNameStr = ep.name();
+          String epBase    = getFileBaseName(epNameStr);
+          String epExt     = epNameStr.substring(epNameStr.lastIndexOf('.'));
+
+          jsonFile.print("      { \"name\": \"" + epBase +
+                         "\", \"file\": \"Shows/" + folderName +
+                         "/" + epBase + epExt + "\" }");
+
+          logBuf += "   • " + epNameStr + "\n";
+          if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+            lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+            lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+            lv_timer_handler();
+          }
         }
+      }
+      jsonFile.println();
+      jsonFile.println("    ]}");
     }
+  }
+  jsonFile.println();
+  jsonFile.println("  ],");
 
-    // Shows
-    JsonArray shows = doc.createNestedArray("shows");
-    File showsRoot = SD_MMC.open("/Shows");
+  // ─── Shows complete: flush & clear ───
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+  lv_timer_handler();
+  delay(100);
+  logBuf = "";
+  logCount = 0;
 
-    while (File folder = showsRoot.openNextFile()) {
-        if (folder.isDirectory()) {
-            String folderName = String(folder.name()); // just "GravityFalls"
-            String fullPath = "/Shows/" + folderName;
+  // ─── 6) Books ───
+  jsonFile.println("  \"books\": [");
+  File booksDir = SD_MMC.open("/Books");
+  bool firstBook = true;
+  std::vector<String> bookExts = { ".pdf", ".epub" };
+  while (File file = booksDir.openNextFile()) {
+    yield();
+    if (!file.isDirectory() && isValidExtension(file.name(), bookExts)) {
+      if (!firstBook) jsonFile.println(",");
+      firstBook = false;
+      String nameStr = file.name();
+      String base    = getFileBaseName(nameStr);
+      String ext     = nameStr.substring(nameStr.lastIndexOf('.'));
+      String cover   = SD_MMC.exists("/Books/" + base + ".jpg")
+                       ? "books/" + base + ".jpg"
+                       : "placeholder.jpg";
 
-            Serial.println("[MediaGen] Found show folder: " + folderName);
+      jsonFile.print("    { \"name\": \"" + base +
+                     "\", \"cover\": \"" + cover +
+                     "\", \"file\": \"Books/" + base + ext + "\" }");
 
-            JsonObject show = shows.createNestedObject();
-            show["name"] = folderName;
+      logBuf += "- " + nameStr + "\n";
+      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+        lv_timer_handler();
+      }
+    }
+  }
+  jsonFile.println();
+  jsonFile.println("  ],");
 
-            String coverPath = "shows/" + folderName + ".jpg";
-            if (!SD_MMC.exists("/Shows/" + folderName + ".jpg")) {
-                coverPath = "placeholder.jpg";
+  // ─── Books complete: flush & clear ───
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+  lv_timer_handler();
+  delay(100);
+  logBuf = "";
+  logCount = 0;
+
+  // ─── 7) Music ───
+  jsonFile.println("  \"music\": [");
+  File musicDir = SD_MMC.open("/Music");
+  bool firstMusic = true;
+  std::vector<String> musicExts = { ".mp3", ".flac", ".wav", ".ogg", ".aac", ".m4a" };
+  while (File file = musicDir.openNextFile()) {
+    yield();
+    if (!file.isDirectory() && isValidExtension(file.name(), musicExts)) {
+      if (!firstMusic) jsonFile.println(",");
+      firstMusic = false;
+      String nameStr = file.name();
+      String base    = getFileBaseName(nameStr);
+      String ext     = nameStr.substring(nameStr.lastIndexOf('.'));
+      String cover   = SD_MMC.exists("/Music/" + base + ".jpg")
+                       ? "music/" + base + ".jpg"
+                       : "placeholder.jpg";
+
+      jsonFile.print("    { \"name\": \"" + base +
+                     "\", \"cover\": \"" + cover +
+                     "\", \"file\": \"Music/" + base + ext + "\" }");
+
+      logBuf += "- " + nameStr + "\n";
+      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+        lv_timer_handler();
+      }
+    }
+  }
+  jsonFile.println();
+  jsonFile.println("  ],");
+
+  // ─── Music complete: flush & clear ───
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+  lv_timer_handler();
+  delay(100);
+  logBuf = "";
+  logCount = 0;
+
+  // ─── 8) Playlists ───
+  jsonFile.println("  \"playlists\": {");
+  File musicRoot = SD_MMC.open("/Music");
+  bool firstPl = true;
+  while (File folder = musicRoot.openNextFile()) {
+    yield();
+    if (folder.isDirectory()) {
+      if (!firstPl) jsonFile.println(",");
+      firstPl = false;
+      String plName = folder.name();
+      jsonFile.println("    \"" + plName + "\": [");
+
+      logBuf += "\n🎵 " + plName + "\n";
+      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+        lv_timer_handler();
+      }
+
+      std::vector<String> tracks;
+      std::function<void(File, const String&)> collectTracks =
+        [&](File dir, const String& relPath) {
+          while (File t = dir.openNextFile()) {
+            yield();
+            String full = relPath + "/" + String(t.name());
+            if (t.isDirectory()) {
+              collectTracks(SD_MMC.open("/Music/" + full), full);
+            } else if (isValidExtension(full, musicExts)) {
+              tracks.push_back(full);
             }
-            show["cover"] = coverPath;
+          }
+        };
+      collectTracks(SD_MMC.open("/Music/" + plName), plName);
 
-            JsonArray episodes = show.createNestedArray("episodes");
+      for (size_t i = 0; i < tracks.size(); ++i) {
+        String tname = tracks[i].substring(tracks[i].lastIndexOf('/') + 1);
+        String base2  = getFileBaseName(tname);
+        String cover2 = SD_MMC.exists("/Music/" + base2 + ".jpg")
+                        ? "music/" + base2 + ".jpg"
+                        : "placeholder.jpg";
 
-            File epFolder = SD_MMC.open(fullPath);
-            while (File ep = epFolder.openNextFile()) {
-                if (!ep.isDirectory()) {
-                    String epName = String(ep.name());
-                    if (epName.endsWith(".mp4") || epName.endsWith(".mkv")) {
-                        String epBase = epName.substring(epName.lastIndexOf('/') + 1);
+        jsonFile.print("      { \"name\": \"" + base2 +
+                       "\", \"cover\": \"" + cover2 +
+                       "\", \"file\": \"Music/" + tracks[i] + "\" }");
+        if (i < tracks.size() - 1) jsonFile.println(",");
 
-                        JsonObject epItem = episodes.createNestedObject();
-                        epItem["name"] = epBase;
-                        epItem["file"] = "Shows/" + folderName + "/" + epBase;
-
-                        Serial.println("  [MediaGen] Episode: " + epBase);
-                    }
-                }
-            }
+        logBuf += "   • " + tname + "\n";
+        if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+          lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+          lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+          lv_timer_handler();
         }
+      }
+      jsonFile.println();
+      jsonFile.println("    ]");
     }
+  }
+  jsonFile.println("  },");
 
-    // Books
-    JsonArray books = doc.createNestedArray("books");
-    File booksDir = SD_MMC.open("/Books");
-    while (File file = booksDir.openNextFile()) {
-        if (!file.isDirectory()) {
-            String name = file.name();
-            if (name.endsWith(".pdf") || name.endsWith(".epub")) {
-                Serial.println("[MediaGen] Found book: " + name);
-                String base = name.substring(name.lastIndexOf('/') + 1);
-                base = base.substring(0, base.lastIndexOf('.'));
+  // ─── Playlists complete: flush & clear ───
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+  lv_timer_handler();
+  delay(100);
+  logBuf = "";
+  logCount = 0;
 
-                String cover = "books/" + base + ".jpg";
-                if (!SD_MMC.exists("/Books/" + base + ".jpg")) {
-                    cover = "placeholder.jpg";
-                }
-
-                JsonObject item = books.createNestedObject();
-                item["name"] = base;
-                item["cover"] = cover;
-                item["file"] = "Books/" + base + name.substring(name.lastIndexOf('.'));
-            }
+  // ─── 9) Gallery ───
+  jsonFile.println("  \"gallery\": [");
+  {
+    File galleryDir = SD_MMC.open("/Gallery");
+    bool firstItem = true;
+    std::vector<String> mediaExts = {
+      ".jpg", ".jpeg", ".png", ".bmp", ".gif",
+      ".mp4",
+      ".webm", ".mov", ".avi", ".mkv"
+    };
+    while (File f = galleryDir.openNextFile()) {
+      yield();
+      String fname = f.name();
+      if (!f.isDirectory() && isValidExtension(fname, mediaExts)) {
+        if (!firstItem) jsonFile.println(",");
+        firstItem = false;
+        String base = getFileBaseName(fname);
+        jsonFile.print("    {\"name\":\"" + base +
+                       "\",\"file\":\"Gallery/" + fname + "\"}");
+        logBuf += "- " + fname + "\n";
+        if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+          lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+          lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+          lv_timer_handler();
         }
+      }
     }
+    jsonFile.println();
+  }
+  jsonFile.println("  ],");
 
-    // Music
-    JsonArray music = doc.createNestedArray("music");
-    File musicDir = SD_MMC.open("/Music");
-    while (File file = musicDir.openNextFile()) {
-        if (!file.isDirectory()) {
-            String name = file.name();
-            if (name.endsWith(".mp3")) {
-                Serial.println("[MediaGen] Found music: " + name);
-                String base = name.substring(name.lastIndexOf('/') + 1);
-                base = base.substring(0, base.lastIndexOf('.'));
+  // ─── Gallery complete: flush & clear ───
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+  lv_timer_handler();
+  delay(100);
+  logBuf = "";
+  logCount = 0;
 
-                String cover = "music/" + base + ".jpg";
-                if (!SD_MMC.exists("/Music/" + base + ".jpg")) {
-                    cover = "placeholder.jpg";
-                }
-
-                JsonObject item = music.createNestedObject();
-                item["name"] = base;
-                item["cover"] = cover;
-                item["file"] = "Music/" + base + ".mp3";
-            }
+  // ─── 10) Files ───
+  jsonFile.println("  \"files\": [");
+  {
+    File filesDir = SD_MMC.open("/Files");
+    bool firstFile = true;
+    while (File f = filesDir.openNextFile()) {
+      yield();
+      String fname = f.name();
+      if (!f.isDirectory()) {  
+        if (!firstFile) jsonFile.println(",");
+        firstFile = false;
+        jsonFile.print("    {\"name\":\"" + fname +
+                       "\",\"file\":\"Files/" + fname + "\"}");
+        logBuf += "- " + fname + "\n";
+        if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+          lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+          lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+          lv_timer_handler();
         }
+      }
     }
+    jsonFile.println();
+  }
+  jsonFile.println("  ]");
 
-    // Save to media.json
-    File jsonFile = SD_MMC.open("/media.json", FILE_WRITE);
-    if (!jsonFile) {
-        Serial.println("[MediaGen] Error opening media.json for writing.");
-        return;
-    }
+  // ─── 11) Close JSON, final flush & hide ───
+  jsonFile.println("}");
+  jsonFile.close();
 
-    serializeJsonPretty(doc, jsonFile);
-    jsonFile.close();
-    Serial.println("[MediaGen] media.json created successfully.");
+  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
+  lv_timer_handler();
+
+  Serial.println("[MediaGen] media.json created successfully.");
+  lv_obj_add_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
 }
 
 String absURL(const String &path) {
@@ -492,24 +861,39 @@ void handleRangeRequest(AsyncWebServerRequest *request) {
     Serial.println("============================");
 
     /* ----- create async response ----- */
-    AsyncWebServerResponse *response =
-        request->beginResponse("video/mp4", contentLength,
-        /* capture globals by reference so we can set the flag inside */
-        [&, file, startByte, endByte, contentLength]
-        (uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
+    String mimeType = "application/octet-stream"; // fallback
 
+    if (filePath.endsWith(".epub")) mimeType = "application/epub+zip";
+    else if (filePath.endsWith(".pdf")) mimeType = "application/pdf";
+    else if (filePath.endsWith(".mp3")) mimeType = "audio/mpeg";
+    else if (filePath.endsWith(".flac")) mimeType = "audio/flac";
+    else if (filePath.endsWith(".wav")) mimeType = "audio/wav";
+    else if (filePath.endsWith(".ogg")) mimeType = "audio/ogg";
+    else if (filePath.endsWith(".aac")) mimeType = "audio/aac";
+    else if (filePath.endsWith(".m4a")) mimeType = "audio/mp4";  // or audio/x-m4a
+    else if (filePath.endsWith(".mp4")) mimeType = "video/mp4";
+    else if (filePath.endsWith(".webm")) mimeType = "video/webm";
+    else if (filePath.endsWith(".m4v")) mimeType = "video/x-m4v";
+    else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) mimeType = "image/jpeg";
+    else if (filePath.endsWith(".png")) mimeType = "image/png";
+    else if (filePath.endsWith(".cbz")) mimeType = "application/vnd.comicbook+zip";
+    else if (filePath.endsWith(".cbr")) mimeType = "application/vnd.comicbook-rar";
+    AsyncWebServerResponse *response = request->beginResponse(
+        mimeType,         // content type
+        contentLength,    // content length
+        [&, file, startByte, endByte, contentLength] (uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
             /* seek & read */
             file.seek(startByte + index);
             size_t bytesToRead = min(maxLen, endByte - (startByte + index) + 1);
-            size_t bytesRead   = file.read(buffer, bytesToRead);
+            size_t bytesRead = file.read(buffer, bytesToRead);
 
             /* ----- detect read failure ----- */
-            if (bytesRead == 0) {                               
+            if (bytesRead == 0) {
                 Serial.println("[SD] read() failed — recovery");
                 file.close();
-                sdErrorFlag          = true;
+                sdErrorFlag = true;
                 sdErrorCooldownUntil = millis() + 5000;
-                return 0;               // aborts this chunk; client retries
+                return 0;  // aborts this chunk; client retries
             }
 
             /* close when finished */
@@ -517,7 +901,9 @@ void handleRangeRequest(AsyncWebServerRequest *request) {
                 file.close();
             }
             return bytesRead;
-        });
+        }
+    );
+
 
  
     response->addHeader("Accept-Ranges", "bytes");
@@ -630,12 +1016,21 @@ void handleDelete(AsyncWebServerRequest *request) {
         return;
     }
 
-    if (SD_MMC.remove(filename)) {
+    bool success = false;
+    File f = SD_MMC.open(filename);
+    if (f && f.isDirectory()) {
+        success = SD_MMC.rmdir(filename);
+    } else {
+        success = SD_MMC.remove(filename);
+    }
+
+    if (success) {
         request->send(200, "application/json", "{\"status\":\"Delete successful\"}");
     } else {
         request->send(500, "application/json", "{\"error\":\"Delete failed\"}");
     }
 }
+
 
 std::map<AsyncWebServerRequest*, String> uploadPaths;
 File uploadFile;
@@ -643,20 +1038,21 @@ File uploadFile;
 void onUploadHandler(AsyncWebServerRequest *request, const String& filename, size_t index,
                      uint8_t *data, size_t len, bool final) {
     if (index == 0) {
-        // Read subdir from URL query (e.g. /upload-show?subdir=MyShow)
-        String subdir = "/";
-        if (request->hasParam("subdir")) {
-            subdir = request->getParam("subdir")->value();
+        String dir = "/";
+        if (request->hasParam("dir", true)) {
+            dir = request->getParam("dir", true)->value();
+        }
+        if (!dir.startsWith("/")) dir = "/" + dir;
+        if (dir.endsWith("/")) dir.remove(dir.length() - 1);
+
+        String fullPath = dir + "/" + filename;
+
+        if (SD_MMC.exists(fullPath)) {
+            Serial.println("[Upload] Duplicate file blocked: " + fullPath);
+            request->send(409, "application/json", "{\"error\":\"File already exists\"}");
+            return;
         }
 
-        // Sanitize subdir path
-        if (!subdir.startsWith("/")) subdir = "/" + subdir;
-        if (subdir.endsWith("/"))  subdir.remove(subdir.length() - 1);
-
-        // Build the full SD path under /Shows
-        String fullPath = "/Shows" + subdir + "/" + filename;
-
-        // Ensure parent directory exists
         int slashPos = fullPath.lastIndexOf('/');
         if (slashPos != -1) {
             String parent = fullPath.substring(0, slashPos);
@@ -672,19 +1068,17 @@ void onUploadHandler(AsyncWebServerRequest *request, const String& filename, siz
         uploadPaths[request] = fullPath;
     }
 
-    // Write chunk
     if (uploadFile) {
         uploadFile.write(data, len);
     }
 
-    // Finalize
     if (final) {
         Serial.println("[Upload] Complete: " + uploadPaths[request]);
         uploadFile.close();
         uploadPaths.erase(request);
+        request->send(200, "application/json", "{\"status\":\"Upload complete\"}");
     }
 }
-
 
 void createSimpleUploadHandler(const String& mediaFolder, const char* endpoint) {
     server.on(endpoint, HTTP_POST,
@@ -760,23 +1154,7 @@ void handleSDInfo(AsyncWebServerRequest *request) {
 
     request->send(200, "application/json", output);
 }
-String urlencode(String str) {
-    String encoded = "";
-    char c;
-    char bufHex[4];
-    for (int i = 0; i < str.length(); i++) {
-        c = str.charAt(i);
-        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '/') {
-            encoded += c;
-        } else if (c == ' ') {
-            encoded += "%20";
-        } else {
-            sprintf(bufHex, "%%%02X", c);
-            encoded += bufHex;
-        }
-    }
-    return encoded;
-}
+
 void updateSDBAR() {
     uint64_t totalBytes = SD_MMC.totalBytes();
     uint64_t usedBytes = SD_MMC.usedBytes();
@@ -788,22 +1166,139 @@ void updateSDBAR() {
     lv_bar_set_value(ui_sdbar, 0, LV_ANIM_OFF);
   }
 }
+bool checkGenerateFlagFile() {
+    if (SD_MMC.exists("/.generate_flag")) {
+        Serial.println("[BOOT] Found /.generate_flag, will generate media.json");
+        SD_MMC.remove("/.generate_flag");
+        return true;
+    }
+    return false;
+}
+void handleConnector(AsyncWebServerRequest *request) {
+  // 1) Get 'dir' from POST body
+  String dir = "/";
+  if (request->hasParam("dir", true)) {
+    dir = request->getParam("dir", true)->value();
+  }
+  if (!dir.endsWith("/")) dir += "/";
+
+  // 2) Open the directory 
+  File root = SD_MMC.open(dir);
+  if (!root || !root.isDirectory()) {
+    request->send(400, "text/plain", "Invalid directory");
+    return;
+  }
+
+  // 3) Build the HTML <ul> tree
+  String html = "<ul class=\"jqueryFileTree\" style=\"display: none;\">";
+  root.rewindDirectory();
+  File entry;
+  while ((entry = root.openNextFile())) {
+    String name = entry.name();
+    if (entry.isDirectory()) {
+      html += "<li class=\"directory collapsed\">"
+           "<a href=\"#\" rel=\"" + dir + name + "/\">" + name + "</a>"
+           "</li>";
+    } else {
+      int dot = name.lastIndexOf('.');
+      String ext = dot > 0 ? name.substring(dot+1) : "";
+      html += "<li class=\"file ext_" + ext + "\">"
+           "<a href=\"#\" rel=\"" + dir + name + "\">" + name + "</a>"
+           "</li>";
+    }
+    entry.close();
+  }
+  html += "</ul>";
+
+  // 4) Respond
+  request->send(200, "text/html", html);
+}
+void handleMkdir(AsyncWebServerRequest *request) {
+    if (!request->hasParam("dir", true)) {
+        request->send(400, "application/json", "{\"error\":\"Missing 'dir' parameter\"}");
+        return;
+    }
+
+    String dirPath = request->getParam("dir", true)->value();
+
+    if (dirPath == "/" || dirPath == "") {
+        request->send(400, "application/json", "{\"error\":\"Invalid directory path\"}");
+        return;
+    }
+
+    // Normalize path
+    if (!dirPath.startsWith("/")) dirPath = "/" + dirPath;
+
+    if (SD_MMC.exists(dirPath)) {
+        request->send(400, "application/json", "{\"error\":\"Directory already exists\"}");
+        return;
+    }
+
+    if (SD_MMC.mkdir(dirPath)) {
+        request->send(200, "application/json", "{\"success\":\"Directory created\"}");
+    } else {
+        request->send(500, "application/json", "{\"error\":\"Failed to create directory\"}");
+    }
+}
+void applyRGBSettings() {
+  if (settings.rgbMode == "off") {
+    RGB_SetMode(0);  // Off
+  } else if (settings.rgbMode == "solid") {
+    if (settings.rgbColor.length() == 7 && settings.rgbColor.charAt(0) == '#') {
+      // Parse "#RRGGBB"
+      char rs[3] = { settings.rgbColor.charAt(1), settings.rgbColor.charAt(2), 0 };
+      char gs[3] = { settings.rgbColor.charAt(3), settings.rgbColor.charAt(4), 0 };
+      char bs[3] = { settings.rgbColor.charAt(5), settings.rgbColor.charAt(6), 0 };
+
+      solidR = strtol(rs, NULL, 16);
+      solidG = strtol(gs, NULL, 16);
+      solidB = strtol(bs, NULL, 16);
+
+      RGB_SetMode(2);  // Solid color mode
+    } else {
+      Serial.println("[RGB] Invalid color format in settings.rgbColor");
+    }
+  } else if (settings.rgbMode == "rainbow") {
+    RGB_SetMode(1);  // Rainbow mode
+  }
+}
+void applyWiFiSettings() {
+  Serial.print("Starting WiFi with SSID: ");
+  Serial.println(settings.wifiSSID);
+  WiFi.softAP(settings.wifiSSID.c_str(), settings.wifiPassword.c_str());
+  dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
+}
+// Return number of connected stations on the softAP
+int getConnectedUserCount() {
+  // WiFi.softAPgetStationNum() returns uint8_t number of clients
+  return WiFi.softAPgetStationNum();
+}
 // ------------- Main Setup -------------------
 void setup() {
+    Serial.begin(115200);
+    delay(100);
+    Serial.println("=== Booting Nomad (debug) ===");
     pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
 
     if (get_boot_mode() == USB_MODE) {
-      clear_boot_mode();    // <<< reset so next boot goes back to MEDIA
-      Serial.begin(115200);
+      clear_boot_mode();    // next boot will go back to MEDIA
       delay(500);
       Serial.println(">>> USB mode: mounting SD & starting MSC");
+      LCD_Init();
+      Lvgl_Init();
+      ui_init();       
+      lv_scr_load(ui_Screen1);    
+      lv_obj_clear_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
+      lv_textarea_set_text(ui_MediaGen, "USB Mass-Storage Mode");
+      lv_timer_handler();
+      
       launch_usb_mode();
       return;
     }
 
+
     LCD_Init();
     Lvgl_Init();
-    Set_Backlight(90);
     ui_init();
 
     Serial.begin(115200);
@@ -811,9 +1306,9 @@ void setup() {
     Serial.println("\n=== ESP32-S3 Captive Portal & SDMMC Server ===");
 
     // Start WiFi Access Point
-    WiFi.softAP(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.softAP(settings.wifiSSID.c_str(), settings.wifiPassword.c_str());
     Serial.println("WiFi AP started...");
-    lv_label_set_text(ui_ssidlabel, WIFI_SSID);
+  
 
     // Initialize SD card
     Serial.println("Initializing SD Card...");
@@ -826,21 +1321,63 @@ void setup() {
         Serial.println("ERROR: SDMMC Card initialization failed.");
         return;
     }
-
+  
     Serial.println("SD Card initialized successfully!");
+    Serial.println("Loading Settings...");
+    loadSettings();
+    Serial.printf("[SETTINGS] autoGenerateMedia = %s\n", settings.autoGenerateMedia ? "true" : "false");
+    applyWiFiSettings();
+    applyRGBSettings();
+    lv_label_set_text(ui_ssidlabel, settings.wifiSSID.c_str());
+    Serial.print("settings.brightness = ");
+    Serial.println(settings.brightness);
+    bool generateOnce = SD_MMC.exists("/generate_once.flag");
+    bool shouldGenerate = (settings.autoGenerateMedia || generateOnce);
+
+    // Log state
+    Serial.print("[BOOT] autoGenerateMedia (from settings) = ");
+    Serial.println(settings.autoGenerateMedia ? "true" : "false");
+    Serial.print("[BOOT] generate_once.flag = ");
+    Serial.println(generateOnce ? "true" : "false");
+
+    // Remove /boot_done.flag if cold boot or one-time requested
+    esp_reset_reason_t resetReason = esp_reset_reason();
+    if (resetReason == ESP_RST_POWERON || resetReason == ESP_RST_SW || generateOnce) {
+        SD_MMC.remove("/boot_done.flag");
+    }
+
+    // Generate if needed
+    if (shouldGenerate && !SD_MMC.exists("/boot_done.flag")) {
+        Serial.println("[BOOT] Media generation required. Generating media.json...");
+        generateMediaJSON();
+
+        File flagFile = SD_MMC.open("/boot_done.flag", FILE_WRITE);
+        if (flagFile) {
+            flagFile.println("done");
+            flagFile.close();
+        }
+        Serial.println("[BOOT] media.json generated. Boot will continue.");
+
+        if (generateOnce) {
+            clearOneTimeGenerate();
+            Serial.println("[BOOT] Cleared one-time generation trigger.");
+        }
+    } else {
+        Serial.println("[BOOT] Skipping media.json generation.");
+    }
+
+Set_Backlight(settings.brightness);  // now using loaded value
     updateSDBAR();
     createSimpleUploadHandler("Movies", "/upload-movie");
     createSimpleUploadHandler("Music", "/upload-music");
     createSimpleUploadHandler("Books", "/upload-book");
+ 
 
     delay(2000);
 
-    if (AUTO_GENERATE_MEDIA_JSON) {
-        generateMediaJSON();
-    }
     attachInterrupt(BOOT_BUTTON_PIN, [](){
       set_boot_mode(USB_MODE);
-      esp_restart();
+      ESP.restart();
     }, FALLING);
     // Start Captive DNS redirection
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
@@ -1169,10 +1706,49 @@ void setup() {
     );
 
     server.on("/sdinfo", HTTP_GET, handleSDInfo);
-    server.on("/generate-media", HTTP_POST, [](AsyncWebServerRequest *request){
-      generateMediaJSON(); 
-      request->send(200, "text/plain", "Done");
+    server.on("/generate-media", HTTP_POST, [](AsyncWebServerRequest *request) {
+        Serial.println("[ADMIN] /generate-media called");
+
+        if (!SD_MMC.begin()) {
+            request->send(500, "text/plain", "SD card not available.");
+            Serial.println("[ADMIN] SD card not mounted.");
+            return;
+        }
+
+        bool generateOnceFlagExists = SD_MMC.exists("/generate_once.flag");
+
+        if (settings.autoGenerateMedia) {
+            if (!generateOnceFlagExists) {
+                // Always-generate mode: allow one extra reboot-based generation
+                File f = SD_MMC.open("/generate_once.flag", FILE_WRITE);
+                if (f) {
+                    f.print("1");
+                    f.close();
+                    Serial.println("[ADMIN] Created /generate_once.flag (settings.autoGenerateMedia ON)");
+                } else {
+                    Serial.println("[ADMIN] Failed to create /generate_once.flag");
+                }
+            } else {
+                Serial.println("[ADMIN] One-time flag already exists. No action taken.");
+            }
+        } else {
+            // Auto-generation disabled: allow one-time override
+            File f = SD_MMC.open("/generate_once.flag", FILE_WRITE);
+            if (f) {
+                f.print("1");
+                f.close();
+                Serial.println("[ADMIN] Created /generate_once.flag (settings.autoGenerateMedia OFF)");
+            } else {
+                Serial.println("[ADMIN] Failed to create /generate_once.flag");
+            }
+        }
+
+        request->send(200, "text/plain", "Flag set. Rebooting to generate media...");
+        delay(200);  // Let SD write settle
+        ESP.restart();
     });
+
+
 
     // Captive Portal: Redirect all unknown requests
     server.onNotFound([](AsyncWebServerRequest *request) {
@@ -1239,8 +1815,8 @@ void setup() {
       request->send(200, "text/xml", xml);
     });
     server.on("/listfiles", HTTP_GET, handleListFiles);
-
-
+    server.serveStatic("/assets", SD_MMC, "/assets");
+    server.serveStatic("/assets/", SD_MMC, "/assets/");
     // Static HTML routes
     server.serveStatic("/movies.html", SD_MMC, "/movies.html");
     server.serveStatic("/music.html", SD_MMC, "/music.html");
@@ -1258,92 +1834,316 @@ void setup() {
     server.serveStatic("/games",  SD_MMC, "/games.html");
     server.serveStatic("/maps",   SD_MMC, "/maps.html");
     server.serveStatic("/menu",   SD_MMC, "/menu.html");
+    server.serveStatic("/gallery",   SD_MMC, "/gallery.html");
+    server.serveStatic("/files",   SD_MMC, "/files.html");
     // Serve root directory and default to index.html
     server.serveStatic("/", SD_MMC, "/").setDefaultFile("index.html");
+    server.serveStatic("/Gallery", SD_MMC, "/Gallery")
+          .setCacheControl("max-age=86400");
+    server.serveStatic("/Files", SD_MMC, "/Files")
+          .setCacheControl("max-age=86400");
+server.on(
+  "/upload", HTTP_POST,
+  // Final response when upload is complete
+  [](AsyncWebServerRequest *request) {
+    // Response is handled during final chunk or error
+  },
+  // Upload handler
+  [](AsyncWebServerRequest *request, const String &filename, size_t index,
+     uint8_t *data, size_t len, bool final) {
 
-    // Endpoint for video/audio streaming
-    server.on("/media", HTTP_GET, handleRangeRequest);
+    static std::map<AsyncWebServerRequest *, File> uploads;
 
-    // convenience redirect:  /opds  →  /opds/root.xml
-    server.on("/opds", HTTP_GET, [](AsyncWebServerRequest *req){
-        req->redirect("/opds/root.xml");
-    });
-
-    server.on("/upload-show", HTTP_POST,
-      // 1) immediate responder:
-      [](AsyncWebServerRequest *request) {
-          request->send(200, "application/json", "{\"status\":\"Upload finished\"}");
-      },
-      // 2) upload handler:
-      [](AsyncWebServerRequest *request, const String& filename, size_t index,
-        uint8_t *data, size_t len, bool final) {
-          static std::map<AsyncWebServerRequest*, File> showUploads;
-
-          if (index == 0) {
-              // Read subdir from query string:
-              String subdir = "/";
-              if (request->hasParam("subdir")) {
-                  subdir = request->getParam("subdir")->value();
-              }
-              // Sanitize:
-              if (!subdir.startsWith("/")) subdir = "/" + subdir;
-              if (subdir.endsWith("/"))  subdir.remove(subdir.length() - 1);
-
-              String fullPath = "/Shows" + subdir + "/" + filename;
-              int slashPos = fullPath.lastIndexOf('/');
-              if (slashPos != -1) {
-                  SD_MMC.mkdir(fullPath.substring(0, slashPos));
-              }
-
-              Serial.println("[Upload] Starting upload to: " + fullPath);
-              File f = SD_MMC.open(fullPath, FILE_WRITE);
-              if (!f) {
-                  Serial.println("[Upload] Failed to open file for writing");
-                  return;
-              }
-              showUploads[request] = f;
-          }
-
-          if (showUploads.count(request)) {
-              showUploads[request].write(data, len);
-          }
-
-          if (final && showUploads.count(request)) {
-              Serial.println("[Upload] Upload complete for show episode.");
-              showUploads[request].close();
-              showUploads.erase(request);
-          }
+    // Begin upload
+    if (index == 0) {
+      String dir = "/";
+      if (request->hasParam("dir", true)) {
+        dir = request->getParam("dir", true)->value();
       }
-    );
-server.on("/mkdir", HTTP_POST, [](AsyncWebServerRequest *request){
+
+      if (!dir.startsWith("/")) dir = "/" + dir;
+      if (dir.endsWith("/")) dir.remove(dir.length() - 1);
+
+      String fullPath = dir + "/" + filename;
+
+      // Check for duplicate
+      if (SD_MMC.exists(fullPath)) {
+        Serial.println("[Upload] Duplicate file detected: " + fullPath);
+        request->send(409, "application/json", "{\"error\":\"File already exists\"}");
+        return;
+      }
+
+      // Ensure directory exists
+      int slashPos = fullPath.lastIndexOf('/');
+      if (slashPos != -1) {
+        String folder = fullPath.substring(0, slashPos);
+        if (!SD_MMC.exists(folder)) {
+          SD_MMC.mkdir(folder);
+        }
+      }
+
+      File f = SD_MMC.open(fullPath, FILE_WRITE);
+      if (!f) {
+        Serial.println("[Upload] Failed to open file: " + fullPath);
+        request->send(500, "application/json", "{\"error\":\"Failed to open file\"}");
+        return;
+      }
+
+      uploads[request] = f;
+      Serial.println("[Upload] Started: " + fullPath);
+    }
+
+    // Continue writing data
+    if (uploads.count(request)) {
+      uploads[request].write(data, len);
+    }
+
+    // Finalize upload
+    if (final && uploads.count(request)) {
+      uploads[request].close();
+      uploads.erase(request);
+      Serial.println("[Upload] Finished");
+      request->send(200, "application/json", "{\"status\":\"Upload successful\"}");
+    }
+  }
+);
+
+server.on("/list-assets", HTTP_GET, [](AsyncWebServerRequest *request){
+  if (!request->hasParam("dir")) {
+    request->send(400, "application/json", "{\"error\":\"Missing dir\"}");
+    return;
+  }
+
+  String dir = request->getParam("dir")->value();
+  File d = SD_MMC.open(dir);
+  if (!d || !d.isDirectory()) {
+    request->send(404, "application/json", "{\"error\":\"Invalid dir\"}");
+    return;
+  }
+
+  String output = "{\"files\":[";
+  bool first = true;
+  File f;
+  while ((f = d.openNextFile())) {
+    if (!first) output += ",";
+    output += "\"" + String(f.name()).substring(String(dir).length()) + "\"";
+    first = false;
+    f.close();
+  }
+  output += "]}";
+  request->send(200, "application/json", output);
+});
+
+server.on("/mkdir", HTTP_POST, [](AsyncWebServerRequest *request) {
+    // Require POST parameter "dirname"
     if (!request->hasParam("dirname", true)) {
-        request->send(400, "text/plain", "Missing dirname");
+        request->send(400, "text/plain", "Missing 'dirname' parameter");
         return;
     }
 
+    // Get and sanitize input
     String dirName = request->getParam("dirname", true)->value();
 
-    // Sanitize directory name: prevent absolute paths
-    if (dirName.startsWith("/")) dirName = dirName.substring(1);
+    // Ensure it starts with a slash (absolute path)
+    if (!dirName.startsWith("/")) {
+        dirName = "/" + dirName;
+    }
 
-    // Build full path under /Shows
-    String fullPath = "/Shows/" + dirName;
+    // Prevent directory traversal (no "../")
+    if (dirName.indexOf("..") >= 0) {
+        request->send(400, "text/plain", "Invalid directory name");
+        return;
+    }
 
-    if (SD_MMC.exists(fullPath)) {
+    // Remove trailing slash, if present
+    if (dirName.endsWith("/")) {
+        dirName.remove(dirName.length() - 1);
+    }
+
+    // Check if the path already exists
+    if (SD_MMC.exists(dirName)) {
         request->send(409, "text/plain", "Directory already exists");
         return;
     }
 
-    if (SD_MMC.mkdir(fullPath)) {
+    // Attempt to create the directory
+    if (SD_MMC.mkdir(dirName)) {
         request->send(200, "text/plain", "OK");
     } else {
         request->send(500, "text/plain", "Failed to create directory");
     }
-    });
+});
+
 
 static std::map<AsyncWebServerRequest*, String> uploadPaths;
+server.on("/media", HTTP_GET, handleRangeRequest); // THE MOST IMPORTANT ONE
 server.on("/rename", HTTP_POST, handleRename);
 server.on("/delete", HTTP_POST, handleDelete);
+server.on("/connector", HTTP_POST,
+  [](AsyncWebServerRequest *request){
+    handleConnector(request);
+  }
+);
+server.on("/Books/*", HTTP_GET, [](AsyncWebServerRequest *request){
+    String path = request->url();  // e.g. /Books/MyBook.epub
+    if (!SD_MMC.exists(path)) {
+        request->send(404);
+        return;
+    }
+    File file = SD_MMC.open(path, "r");
+    if (!file) {
+        request->send(500);
+        return;
+    }
+
+    String mimeType = "application/octet-stream";
+    if (path.endsWith(".epub")) mimeType = "application/epub+zip";
+
+    AsyncWebServerResponse *response = request->beginResponse(mimeType, file.size(), [file](uint8_t *buffer, size_t maxLen, size_t index) mutable -> size_t {
+        file.seek(index);
+        size_t bytesRead = file.read(buffer, maxLen);
+        if (bytesRead == 0) {
+            file.close();
+        }
+        return bytesRead;
+    });
+
+    if (path.endsWith(".epub")) {
+        String filename = path.substring(path.lastIndexOf('/') + 1);
+        response->addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+    }
+
+    request->send(response);
+});
+
+server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
+  Serial.println("[SAVE] Request received");
+
+  // Check for required POST params
+  if (!request->hasParam("filename", true) || !request->hasParam("content", true)) {
+    Serial.println("[SAVE] Missing filename or content parameter");
+    return request->send(400, "text/plain", "Missing filename or content");
+  }
+
+  // Get parameters (POST body)
+  const AsyncWebParameter* pFile    = request->getParam("filename", true);
+  const AsyncWebParameter* pContent = request->getParam("content", true);
+
+  String path    = pFile->value();    // e.g. "/docs/config.json"
+  String content = pContent->value(); // new file text
+
+  Serial.printf("[SAVE] Filename: %s\n", path.c_str());
+  Serial.printf("[SAVE] Content length: %d\n", content.length());
+
+  // Open file for writing (overwrite)
+  File f = SD_MMC.open(path, FILE_WRITE);
+  if (!f) {
+    Serial.printf("[SAVE] Failed to open file: %s\n", path.c_str());
+    return request->send(500, "text/plain", "Failed to open " + path);
+  }
+
+  size_t bytesWritten = f.print(content);
+  f.close();
+
+  Serial.printf("[SAVE] Bytes written: %d\n", bytesWritten);
+
+  if (bytesWritten != content.length()) {
+    Serial.println("[SAVE] Warning: bytes written does not match content length");
+  }
+
+  request->send(200, "text/plain", "OK");
+});
+
+server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){
+  StaticJsonDocument<512> doc;
+  doc["rgbMode"] = settings.rgbMode;
+  doc["rgbColor"] = settings.rgbColor;
+  doc["wifiSSID"] = settings.wifiSSID;
+  doc["wifiPassword"] = settings.wifiPassword;
+  doc["brightness"] = settings.brightness;
+  doc["autoGenerateMedia"] = settings.autoGenerateMedia;
+
+
+  String json;
+  serializeJson(doc, json);
+  request->send(200, "application/json", json);
+});
+
+// GET current settings
+server.on("/settings", HTTP_GET, [](AsyncWebServerRequest *request){
+  StaticJsonDocument<512> doc;
+  doc["rgbMode"] = settings.rgbMode;
+  doc["rgbColor"] = settings.rgbColor;
+  doc["adminPassword"] = settings.adminPassword; 
+  doc["wifiSSID"] = settings.wifiSSID;
+  doc["wifiPassword"] = settings.wifiPassword;
+  doc["brightness"] = settings.brightness;
+  doc["autoGenerateMedia"] = settings.autoGenerateMedia;
+
+  String json;
+  serializeJson(doc, json);
+  request->send(200, "application/json", json);
+});
+
+// POST to update settings
+server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request){
+  if (!request->hasParam("body", true)) {
+    request->send(400, "application/json", "{\"error\":\"Missing body\"}");
+    return;
+  }
+
+  String body = request->getParam("body", true)->value();
+  StaticJsonDocument<512> doc;
+  DeserializationError error = deserializeJson(doc, body);
+  if (error) {
+    request->send(400, "application/json", "{\"error\":\"Invalid JSON\"}");
+    return;
+  }
+
+  if (doc.containsKey("rgbMode")) settings.rgbMode = doc["rgbMode"].as<String>();
+  if (doc.containsKey("rgbColor")) settings.rgbColor = doc["rgbColor"].as<String>();
+  if (doc.containsKey("adminPassword")) settings.adminPassword = doc["adminPassword"].as<String>();
+  if (doc.containsKey("wifiSSID")) settings.wifiSSID = doc["wifiSSID"].as<String>();
+  if (doc.containsKey("wifiPassword")) settings.wifiPassword = doc["wifiPassword"].as<String>();
+  if (doc.containsKey("brightness")) settings.brightness = doc["brightness"].as<int>();
+  if (doc.containsKey("autoGenerateMedia")) settings.autoGenerateMedia = doc["autoGenerateMedia"].as<bool>();
+
+  if (saveSettings()) {
+    request->send(200, "application/json", "{\"status\":\"updated\"}");
+  } else {
+    request->send(500, "application/json", "{\"error\":\"Failed to save settings\"}");
+  }
+});
+  server.on("/admin-status", HTTP_GET, [](AsyncWebServerRequest *request){
+    // Build JSON
+    StaticJsonDocument<256> doc;
+    doc["ssid"]         = settings.wifiSSID;
+    doc["wifiPassword"] = settings.wifiPassword;
+    doc["users"]        = getConnectedUserCount(); 
+
+    String payload;
+    serializeJson(doc, payload);
+    request->send(200, "application/json", payload);
+  });
+
+  // 2) Restart the device
+  server.on("/restart", HTTP_POST, [](AsyncWebServerRequest *request){
+    request->send(200, "text/plain", "Rebooting...");
+    delay(100);             // let the response go out
+    ESP.restart();          // trigger a software restart
+  });
+
+
+
+  server.on("/enterUsb", HTTP_POST, [](AsyncWebServerRequest *request){
+    Serial.println(">>> /enterUsb handler hit");
+    request->send(200, "text/plain", "OK: entering USB MSC mode...");
+    delay(200);                 
+    set_boot_mode(USB_MODE);
+    ESP.restart();             
+  });
+
+
 // ─── USB‑mode switch: jump to USB MSC on Boot‑button press ───
 attachInterrupt(BOOT_BUTTON_PIN, [](){
   set_boot_mode(USB_MODE);
@@ -1364,7 +2164,7 @@ void loop() {
     if (currentLEDMode == 1) {
         RGB_Lamp_Loop(2);
     }
-    if (sdErrorFlag) {                                             // ✱✱ NEW / RECOVERY ✱✱
+    if (sdErrorFlag) {                                            
         if (millis() > sdErrorCooldownUntil && tryRecoverSDCard()) {
             sdErrorFlag = false;  // we’re back in business
         } else {
@@ -1400,3 +2200,4 @@ void RGB_SetMode(uint8_t mode) {
         Set_Color(solidG, solidR, solidB);
     }
 }
+

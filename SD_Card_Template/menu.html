@@ -67,11 +67,37 @@
                 font-size: 1em;
             }
         }
+        header {
+            position: relative;
+            background-color: var(--primary);
+            color: #fff;
+            padding: 20px;
+            font-size: 2em;
+        }
+
+        .admin-link {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 0.8em;
+            color: #fff;
+            text-decoration: none;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px;
+            border-radius: 50%;
+            transition: background 0.3s;
+        }
+
+        .admin-link:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+
     </style>
 </head>
 <body>
     <header>
         Jcorp Nomad
+        <a href="http://192.168.4.1/admin" class="admin-link" title="Admin Panel">⚙️</a>
     </header>
 
     <div class="content">
@@ -98,11 +124,15 @@
             <!-- Music -->
             <a href="music">Music</a>
 
+            <a href="gallery">Gallery</a>
+
+            <a href="files">Files</a>
+
             <!-- Games -->
             <!--<a href="games">Games</a>
 
             <-- Maps -->
-            <!--<a href="maps">Maps</a>
+            <!--<a href="maps">Maps</a> -->
         </div>
     </div>
 </body>

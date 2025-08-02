@@ -5,9 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Jcorp Nomad Media Server – Books">
-    <title>Nomad Books</title>
+    <title>Nomad • Books</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-
+    <script src="epub.min.js"></script>
     <style>
         :root{--primary:#007bff;--primary-dark:#0056b3;--bg:#f4f4f9;--text:#333;--radius:8px;--shadow:0 4px 12px rgba(0,0,0,0.08);}        
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -55,7 +55,11 @@
         .modal-content button{padding:12px;font-size:1em;margin:10px 0;background:var(--primary);color:#fff;border:none;border-radius:5px;cursor:pointer;width:100%;transition:background-color .3s ease;}
         .modal-content button:hover{background:var(--primary-dark);}        
 
-        footer{background:var(--primary);color:#fff;text-align:center;padding:.75rem;font-size:.85rem;}
+        .modal-content button:disabled {
+        background: #ccc;
+        color: #666;
+        cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -82,6 +86,7 @@
             <h2 id="modalTitle">What would you like to do?</h2>
             <button id="viewButton">View in Browser</button>
             <button id="downloadButton">Download</button>
+            <p id="modalNote" style="margin-top:0.5rem;color:#555;font-size:.9rem;display:none;"></p>
         </div>
     </div>
 
@@ -90,9 +95,6 @@
     <script>
         document.getElementById('year').textContent = new Date().getFullYear();
 
-        /* -------------------------------------------------------------
-           Utility & setup
-        ------------------------------------------------------------- */
         const searchInput = document.getElementById('searchInput');
         const sortSelect  = document.getElementById('sortSelect');
         const gridElement = document.getElementById('grid');
@@ -105,9 +107,6 @@
         const booksKey = 'nomadBooksSize';
         let books = [], filtered = [], debounceTimer = null, currentBook = null;
 
-        /* -------------------------------------------------------------
-           Grid size handling (persist across visits)
-        ------------------------------------------------------------- */
         let currentSize = localStorage.getItem(booksKey) || 'medium';
         function setViewSize(size){
             currentSize = size;
@@ -118,9 +117,6 @@
         setViewSize(currentSize);
         viewButtons.forEach(btn=>btn.addEventListener('click',()=>setViewSize(btn.dataset.size)));
 
-        /* -------------------------------------------------------------
-           Fetch & render
-        ------------------------------------------------------------- */
         async function init(){
             try{
                 const res = await fetch('/media.json');
@@ -162,37 +158,78 @@
             gridElement.appendChild(frag);
         }
 
-        /* -------------------------------------------------------------
-           Modal actions
-        ------------------------------------------------------------- */
         function showBookOptions(book){
             currentBook = book;
-            document.getElementById('modalTitle').textContent = `What would you like to do with "${book.name}"?`;
-            modal.style.display = 'flex';
+            const ext     = fileExt(book.path);
+            const noteEl  = document.getElementById('modalNote');
+            const titleEl = document.getElementById('modalTitle');
+
+            titleEl.textContent = `What would you like to do with "${book.name}"?`;
+
+            if (ext === '.epub') {
+            // EPUB-specific UI
+            viewBtn.textContent = 'Not supported';
+            viewBtn.disabled   = true;
+            viewBtn.title      = 'EPUBs need to be downloaded and read in a separate app';
+
+            // Show disclaimer
+            noteEl.textContent   = 'In‑browser reading of EPUBs is not supported. Please download and open in an EPUB reader.';
+            noteEl.style.display = 'block';
+
+            } else {
+            // Other files (PDF, etc.)
+            viewBtn.textContent = 'View in Browser';
+            viewBtn.disabled   = false;
+            viewBtn.title      = '';
+
+            // Hide disclaimer
+            noteEl.textContent   = '';
+            noteEl.style.display = 'none';
+            }
+
+            downloadBtn.textContent = 'Download';    // ensure download label
+            modal.style.display     = 'flex';
         }
+
         function closeModal(evt){if(evt.target===modal){modal.style.display='none';}}
-        viewBtn.onclick = ()=>{ if(currentBook){ openBook(currentBook);} modal.style.display='none'; };
+        viewBtn.onclick = ()=>{ 
+        if (!currentBook) return;
+
+        const ext = fileExt(currentBook.path);
+        if (ext !== '.epub') {
+            openBook(currentBook);
+        }
+        modal.style.display = 'none';
+        };
         downloadBtn.onclick = ()=>{ if(currentBook){ downloadBook(currentBook);} modal.style.display='none'; };
 
         function openBook(book){
-            let url = book.path;
-            if(fileExt(url)==='.epub'){ url = `/reader.html?file=${encodeURIComponent(url)}`; }
-            window.open(url, '_blank'); // one‑step view
+            const ext = fileExt(book.path);
+            let url;
+
+            if (ext === '.epub') {
+         
+            url = `/reader.html?file=${encodeURIComponent(book.path)}`;
+            } else {
+            // PDF (and all others) direct file URL
+            url = book.path;
+            }
+
+            window.open(url, '_blank');
         }
-        function downloadBook(book){
+        function downloadBook(book) {
             const a = document.createElement('a');
-            a.href = book.path; a.download = book.name; a.click();
+            a.href = book.path;
+
+            let filename = book.path.substring(book.path.lastIndexOf('/') + 1);
+
+            a.download = filename;  // Force download with proper filename and extension
+            a.click();
         }
 
-        /* -------------------------------------------------------------
-           Search & sort events
-        ------------------------------------------------------------- */
         searchInput.addEventListener('input', e=>{clearTimeout(debounceTimer); debounceTimer = setTimeout(()=>applyFilter(e.target.value),150);} );
         sortSelect.addEventListener('change', ()=>applySort(sortSelect.value));
 
-        /* -------------------------------------------------------------
-           Init
-        ------------------------------------------------------------- */
         init();
     </script>
 </body>

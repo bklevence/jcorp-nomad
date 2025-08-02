@@ -3,486 +3,1571 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SD Card File Manager</title>
+  <title>Nomad Admin Panel</title>
   <style>
     :root {
       --primary: #007bff;
       --danger: #dc3545;
-      --bg: #f9f9f9;
-      --card: #fff;
-      --text: #333;
+      --bg: #f0f4fa;
+      --card: #ffffff;
+      --text: #2b2b2b;
+      --muted: #6c757d;
     }
     *, *::before, *::after { box-sizing: border-box; }
     body {
-      margin: 0; font-family: Arial, sans-serif;
-      background: var(--bg); color: var(--text);
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      padding: 0;
+      overflow-x: hidden;
     }
     header {
-      background: var(--card); padding: 1rem;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-      position: sticky; top: 0; z-index: 100;
+      background: var(--card);
+      padding: 1rem;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.5rem;
+      padding: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+      padding: 2rem;
       text-align: center;
     }
-    #sd-block {
-      background: var(--card); padding: 1rem;
-      display: flex; flex-direction: column; align-items: center;
-      gap: 0.5rem; text-align: center;
+    h2 {
+      font-size: 1.25rem;
+      margin-top: 0;
+      color: var(--primary);
     }
-    #upload-bar-container {
-      padding: 1rem; text-align: center;
+    label {
+      display: block;
+      margin: 0.75rem 0 0.25rem;
+      font-size: 0.9rem;
     }
-    #global-upload-progress {
-      display: flex; align-items: center; justify-content: center;
-      gap: 0.5rem; max-width: 600px; margin: 0 auto;
+    input[type="text"], input[type="password"], input[type="range"], input[type="color"] {
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
     }
-    #global-upload-progress progress { flex: 1; height: 1rem; }
-    #file-manager {
-      padding: 1rem; display: grid;
-      grid-template-columns: 1fr;
+    button {
+      background: var(--primary);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .btn-danger {
+      background: var(--danger);
+    }
+    .rgb-buttons button {
+      padding: 10px 15px;
+      border: 1px solid #ccc;
+      background-color: #eee;
+      color: #333;
+      margin-right: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .rgb-buttons button.active {
+      background-color: #2196f3;
+      color: white;
+      border-color: #1976d2;
+    }
+
+    .color-input {
+      margin-top: 0.75rem;
+    }
+    progress {
+      width: 100%;
+      height: 1rem;
+      margin-top: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .toggle-switch {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .file-manager {
+      width: 100%;
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 1rem;
+      margin: 0 auto;
+    }
+    #generate-msg {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+    .file-manager {
+      max-width: 900px;
+      width: calc(100% - 32px);
+      margin: 20px auto;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .file-manager-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2rem;
+      padding: 1rem;
+    }
+
+    #sidebar {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    #controls {
+      flex: 1 1 300px;
+      min-width: 260px;
+    }
+
+    #actions .action-group {
+      margin: 8px 0;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #editorModal {
+      margin-top: 20px;
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .file-manager-content {
+        flex-direction: column;
+      }
+
+      #sidebar, #controls {
+        width: 100%;
+      }
+    }
+
+
+      #editorControls {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      #editorControls button {
+        width: 100%;
+      }
+    
+    
+    .controls-section {
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto; 
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .controls-section h3 {
+      color: var(--primary);
+      margin: 0;
+    }
+
+    #info {
+      margin-bottom: 1rem;
+    }
+
+    #actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      align-items: center;   
+      width: 100%;
+    }
+
+    #actions button {
+      width: 100%;
+      max-width: 300px;
+      margin: 0 auto; 
+    }
+
+    #status {
+      margin-top: 0.5rem;
+      min-height: 1.2em;     
+      text-align: center;
+      color: var(--primary);
+      font-size: 0.9rem;
+    }
+
+    #progressBar {
+      background: var(--primary);
+      height: 6px;
+      border-radius: 4px;
+      width: 0%;
+      margin-top: 4px;
+      transition: width 0.2s;
+    }
+
+    /* Buttons stack on small screens */
+    @media (max-width: 768px) {
+      #actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      #actions button {
+        width: 100%;
+      }
+
+      .controls-section {
+        order: -1
+      }
+    }
+ 
+    .file-tree-panel {
+      flex: 2;
+      min-height: 300px;
+      max-height: 100vh;
+      overflow-y: auto;
+      padding: 1rem;
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .file-tree-panel h3 {
+      color: var(--primary);
+      text-align: center;
+      margin: 0 0 1rem 0;
+    }
+
+    .file-list {
+      flex-grow: 1;
+      overflow-y: auto;
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+   
+    @media (max-width: 768px) {
+      .file-tree-panel {
+        order: 2; 
+        min-height: 200px;
+        max-height: 50vh;
+      }
+    }
+
+    #round-color-picker {
+      margin: 0.5rem auto 0;
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 5px rgba(0,0,0,0.2);
+      user-select: none;
+    }
+    #led-color {
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 0 5px rgba(0,0,0,0.2);
+      -webkit-appearance: none;
+      appearance: none;
+      padding: 0;
+    }
+    #led-color::-webkit-color-swatch-wrapper {
+      padding: 0;
+    }
+    #led-color::-webkit-color-swatch {
+      border-radius: 50%;
+      border: none;
+    }
+    
+    #sd-percent {
+      font-size: 4rem;  
+      font-weight: bold;
+      margin-top: 1rem;
+      text-align: center;  
+      line-height: 1.2;
+    }
+    #brightness-percent {
+      font-size: 4rem;      
+      font-weight: bold;
+      margin-top: 1rem;
+      text-align: center;
+      line-height: 1.2;
+    }
+
+    #pw‐overlay {
+      position: fixed;
+      top:0; left:0; right:0; bottom:0;
+      background: rgba(0,0,0,0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    #pw‐overlay.hidden { display: none; }
+    #pw‐modal {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      text-align: center;
+    }
+    #pw‐error {
+      color: red;
+      margin-top: 0.5rem;
+    }
+    #pw‐error.hidden { display: none; }
+    .admin-bar {
+      grid-column: 1 / -1;
+      background: var(--card);
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      flex-wrap: wrap;
       gap: 1rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      border-bottom: 2px solid var(--primary);
     }
-    .section, .subsection {
-      background: var(--card); border-radius: 8px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-      overflow: hidden;
+    .admin-info {
+      margin-left: auto;
     }
-    .section-header, .subsection-header {
-      display: flex; flex-direction: column;
-      align-items: flex-start;
-      padding: 1rem; border-bottom: 1px solid #ccc;
+
+    #btn-restart {
+      background: var(--danger);
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1.25rem;
+      font-size: 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.2s;
+    }
+
+    #btn-restart:hover {
+      background: #a71d2a;
+      transform: scale(1.03);
+    }
+
+    .admin-info {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .info-block {
+      background: var(--background);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+      transition: background 0.2s, transform 0.2s;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .info-block:hover {
+      background: var(--primary-fade);
+      transform: translateY(-2px);
+    }
+
+    .label {
+      font-weight: bold;
+    }
+    .menu-button {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 8px 14px;
+      background-color: #2196f3;
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .toggle-container {
+      display: flex;
+      flex-direction: column;   
+      align-items: center;     
+      gap: 0.4rem;             
+      max-width: 240px;        
+      margin: 0 auto;      
+    }
+
+    .toggle-container > button,
+    .toggle-container > label {
+      width: 100%;        
+      text-align: center;
+    }
+
+    .toggle-container label {
+      margin: 0;            
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    #auto-generate-toggle {
+      width: 100%;        
+      cursor: pointer;
+      padding: 0.5rem 0;
+    }
+
+    .toggle-btn {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 8px;
+      background-color: #ccc;
+      color: #000;
+      font-weight: bold;
       cursor: pointer;
     }
-    .toggle-icon { font-size: 1.2rem; margin-right: 0.5rem; }
-    .upload-btn {
-      background: var(--primary); color: white;
-      border: none; padding: 0.5rem 1rem;
-      border-radius: 4px; cursor: pointer; margin-top: 0.5rem;
-    }
-    .upload-input { display: none; }
-    .file-entry {
-      padding: 1rem; border-bottom: 1px solid #eee;
-    }
-    .file-entry h4 {
-      margin: 0 0 0.3rem 0; font-size: 1rem;
-    }
-    .file-size {
-      font-size: 0.85rem; color: #666;
-    }
-    .rename-input {
-      width: 100%; padding: 0.4rem;
-      font-size: 1rem; margin: 0.5rem 0;
-    }
-    .rename-btn, .delete-btn {
-      padding: 0.4rem 1rem; border: none;
-      border-radius: 4px; font-size: 1rem;
-      color: #fff; margin-right: 0.5rem;
-    }
-    .rename-btn { background: var(--primary); }
-    .delete-btn { background: var(--danger); }
-      /* LED Control Card */
-#led-controls {
-    max-width: 400px;
-    margin: 1.5rem auto;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 8px 20px rgb(0 0 0 / 0.12);
-    padding: 1.8rem 2rem;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    color: #222;
-  }
-  #led-controls h3 {
-    margin-top: 0;
-    margin-bottom: 1.25rem;
-    font-weight: 700;
-    font-size: 1.6rem;
-    letter-spacing: 0.03em;
-    text-align: center;
-  }
 
-  /* Mode Buttons */
-  #led-mode {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 1.8rem;
-  }
-  #led-mode button {
-    flex: 1;
-    margin: 0 0.3rem;
-    padding: 0.6rem 0;
-    border: none;
-    border-radius: 25px;
-    font-weight: 600;
-    font-size: 1rem;
-    color: #666;
-    background: #eee;
-    cursor: pointer;
-    box-shadow: inset 0 0 8px rgb(0 0 0 / 0.05);
-    transition: all 0.3s ease;
-  }
-  #led-mode button.active {
-    background: #0d6efd;
-    color: white;
-    box-shadow: 0 4px 10px rgb(13 110 253 / 0.4);
-  }
-  #led-mode button:hover:not(.active) {
-    background: #cce0ff;
-  }
+    .toggle-btn.enabled {
+      background-color: #4caf50;
+      color: white;
+    }
 
-  /* Color Picker */
-  #color-control {
-    display: flex;
-    justify-content: center;
-  }
-  #led-color {
-    width: 80px;
-    height: 80px;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    box-shadow: 0 0 8px rgba(0, 0, 0, 0.15);
-    transition: box-shadow 0.3s ease;
-  }
-  #led-color:focus {
-    outline: none;
-    box-shadow: 0 0 10px #0d6efdaa;
-  }
+    .toggle-btn.off {
+      background-color: #aaa;
+      color: #333;
+    }
+    #generate-msg {
+      margin-bottom: 1rem;   
+      min-height: 1.2em;    
+    }
+
+    .card h2 + #generate-msg,
+    .card h2 + button {
+      margin-top: 1.5rem;   
+    }
+    #btn-disable-password {
+      margin-top: 0.5rem;
+      background-color: #777;
+      color: white;
+    }
+
+    #btn-disable-password:hover {
+      background-color: #555;
+    }
+
+    .brightness-wrapper {
+      width: 90%;           
+      max-width: 280px;     
+      margin: 0 auto;       
+      overflow: hidden;    
+    }
+
+    .brightness-wrapper input[type="range"] {
+      width: 100%;          
+      display: block;     
+      margin: 0;           
+      padding: 0;        
+      box-sizing: border-box;
+    }
+    
+    .action-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      max-width: 500px; 
+      padding: 0 1rem;
+    }
+
+    @media (max-width: 768px) {
+      .action-group {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+    .action-group button {
+      flex: 1 1 45%;      
+      min-width: 120px;
+    }
+
+    }
+    #editorModal {
+      display: none;
+      position: fixed;
+      top: 5%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 800px;
+      height: 75%;
+      background: #fff;
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      z-index: 100;
+      overflow: hidden;
+    }
+
+    #editorModal textarea {
+      width: 100%;
+      height: calc(100% - 60px);     
+      resize: none;
+      font-family: monospace;
+      font-size: 16px;            
+      line-height: 1.5;               
+      background: #111;
+      color: #eee;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 0.75rem;
+      box-sizing: border-box;
+      overflow-x: auto;         
+      overflow-y: auto;
+      white-space: pre;               
+      word-wrap: normal;              
+    }
+    
+    
+    #editorModal {
+      padding: 1rem;
+      overflow: hidden;            
+    }
+
+    #actions button {
+      font-size: 1rem;
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+    }
+    #actions button:hover {
+      background-color: #0056b3;
+      color: #fff;
+      transform: scale(1.03);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    }
+    #info-label {
+      font-weight: bold;
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+    button.neutral {
+      background: #444;
+      color: #fff;
+    }
+
+    button.neutral:hover:enabled {
+      background: #555;
+    }
+
+    button.primary {
+      background: #2d8fff;
+      color: #fff;
+    }
+
+    button.primary:hover:enabled {
+      background: #1c74d0;
+    }
+
+    button.danger {
+      background: #cc3333;
+      color: white;
+    }
+
+    button.danger:hover:enabled {
+      background: #aa2222;
+    }
+
+    button:disabled {
+      background: #888;
+      cursor: not-allowed;
+    }
+
+    /* Desktop override */
+    @media (min-width: 768px) {
+      .file-manager-content {
+        flex-direction: row;
+        align-items: flex-start;
+      }
+
+      #sidebar {
+        flex: 1;
+      }
+
+      .controls-section {
+        flex: 1;
+      }
+
+      #actions {
+        align-items: stretch;
+      }
+
+      #actions button {
+        font-size: 1.1rem;
+        min-width: 220px;
+      }
+    }
+    #pw-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.94); 
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px); 
+    }
+
+    #pw-overlay.hidden {
+      display: none;
+    }
+
+    #pw-modal {
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      width: 300px;
+      max-width: 90%;
+      text-align: center;
+      box-shadow: 0 0 15px rgba(0,0,0,0.3);
+    }
+
+    #pw-error {
+      color: red;
+      margin-top: 1rem;
+      font-weight: bold;
+    }
+
+    #pw-error.hidden {
+      display: none;
+    }
+
+    #pw-input {
+      width: 100%;
+      padding: 0.5rem;
+      font-size: 1.2rem;
+      margin-top: 1rem;
+      box-sizing: border-box;
+    }
+
+    #pw-submit {
+      margin-top: 1rem;
+      padding: 0.5rem 1rem;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+
   </style>
+  <link rel="stylesheet" href="/assets/jqueryfiletree/jQueryFileTree.min.css">
+  <script src="/assets/jquery.min.js"></script>
+  <script src="/assets/jqueryfiletree/jQueryFileTree.min.js"></script>
 </head>
 <body>
-<header><h1>SD Card File Manager</h1></header>
-<div id="sd-block">
-  <span id="sd-used">Used: -- GB</span>
-  <span id="sd-total">Total: -- GB</span>
-  <progress id="sd-bar" max="100" value="0"></progress>
-</div>
-<div id="upload-bar-container">
-  <div id="global-upload-progress">
-    <progress id="global-progress-bar" max="100" value="0"></progress>
-    <span id="global-progress-message"></span>
-  </div>
-  <div style="margin-top: 0.5rem;">
-    <strong id="upload-filename"></strong>
-  </div>
-  <div style="margin-top: 1rem;">
-    <button class="upload-btn" onclick="generateMedia()">Generate media.json</button>
-    <div id="generate-msg" style="margin-top: 0.3rem; font-size: 0.9rem; color: #555;"></div>
+
+<div id="pw-overlay" class="hidden">
+  <div id="pw-modal">
+    <h2>Enter Admin Password</h2>
+    <input type="password" id="pw-input" autocomplete="off" placeholder="Password" />
+    <button id="pw-submit">Submit</button>
+    <div id="pw-error" class="hidden">Incorrect password, try again.</div>
   </div>
 </div>
-<div id="file-manager"></div>
-<div id="led-controls" aria-label="LED Control Panel" role="region">
-  <h3>LED Mode</h3>
-
-  <div id="led-mode" role="group" aria-label="LED Modes">
-    <button id="mode-off" class="active" aria-pressed="true" type="button">Off</button>
-    <button id="mode-solid" aria-pressed="false" type="button">Solid</button>
-    <button id="mode-rainbow" aria-pressed="false" type="button">RGB Loop</button>
-  </div>
-
-  <div id="color-control">
-    <input type="color" id="led-color" aria-label="LED Color Picker" value="#ff0000" disabled />
-  </div>
-</div>
-<script>
-const dirs = [
-  {name:'Movies', path:'/Movies', upload:'/upload-movie'},
-  {name:'Shows', path:'/Shows', upload:'/upload-show'},
-  {name:'Books', path:'/Books', upload:'/upload-book'},
-  {name:'Music', path:'/Music', upload:'/upload-music'}
-];
-
-const sdTotal = document.getElementById('sd-total');
-const sdUsed = document.getElementById('sd-used');
-const sdBar = document.getElementById('sd-bar');
-const gbar = document.getElementById('global-progress-bar');
-const gmsg = document.getElementById('global-progress-message');
-const gfile = document.getElementById('upload-filename');
-
-function showGlobal(msg) {
-  gmsg.textContent = msg;
-  gbar.value = 0;
-}
-function updateGlobal(p) {
-  gbar.value = p;
-  gmsg.textContent = Math.round(p)+'%';
-}
-function hideGlobal() {
-  setTimeout(() => {
-    gmsg.textContent = '';
-    gfile.textContent = '';
-    gbar.value = 0;
-  }, 1000);
-}
-
-async function fetchSD() {
-  try {
-    const res = await fetch('/sdinfo');
-    const { total, used } = await res.json();
-    sdTotal.textContent = `Total: ${(total/1e9).toFixed(2)} GB`;
-    sdUsed.textContent  = `Used: ${(used/1e9).toFixed(2)} GB`;
-    sdBar.value = used / total * 100;
-  } catch {}
-}
-fetchSD(); setInterval(fetchSD, 30000);
-
-const mgr = document.getElementById('file-manager');
-dirs.forEach(d => createSection(d));
-
-function createSection(d) {
-  const section = document.createElement('div');
-  section.className = 'section';
-  const header = document.createElement('div');
-  header.className = 'section-header';
-  header.innerHTML = `<span class="toggle-icon">▶</span><strong>${d.name}</strong>`;
-
-  const btn = document.createElement('button');
-  btn.className = 'upload-btn';
-  btn.textContent = d.name === 'Shows' ? '+ New Show' : 'Upload';
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.multiple = true; inp.className = 'upload-input';
-  header.append(btn, inp);
-
-  const content = document.createElement('div');
-  content.style.display = 'none';
-
-  header.addEventListener('click', e => {
-    if (e.target === btn) return;
-    const open = content.style.display === 'block';
-    content.style.display = open ? 'none' : 'block';
-    header.querySelector('.toggle-icon').textContent = open ? '▶' : '▼';
-    if (!content.dataset.loaded) {
-      d.name === 'Shows' ? loadShows(content) : loadFiles(d, content);
-      content.dataset.loaded = '1';
-    }
-  });
-
-  btn.addEventListener('click', async e => {
-    e.stopPropagation();
-    if (d.name === 'Shows') {
-      const nm = prompt('New show folder:');
-      if (!nm) return;
-      const fd = new FormData(); fd.append('dirname', nm);
-      if ((await fetch('/mkdir', {method:'POST', body:fd})).ok) location.reload();
-    } else {
-      inp.click();
-    }
-  });
-
-  inp.addEventListener('change', async () => {
-    for (const file of inp.files) {
-      showGlobal('Uploading...');
-      gfile.textContent = file.name;
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', d.upload);
-      xhr.upload.onprogress = e => updateGlobal(e.loaded/e.total*100);
-      xhr.onload = () => location.reload();
-      const fd = new FormData(); fd.append('file', file);
-      xhr.send(fd);
-    }
-    inp.value = '';
-  });
-
-  section.append(header, content);
-  mgr.append(section);
-}
-
-async function loadFiles(d, container) {
-  container.innerHTML = '';
-  const res = await fetch(`/listfiles?dir=${encodeURIComponent(d.path)}`);
-  const files = await res.json();
-  files.forEach(f => {
-    if (!f.isDir) container.append(makeFileEntry(d.path, f));
-  });
-}
-
-async function loadShows(container) {
-  container.innerHTML = '';
-  const res = await fetch('/listfiles?dir=/Shows');
-  const folders = (await res.json()).filter(f => f.isDir);
-  for (const folder of folders) {
-    const sec = document.createElement('div');
-    sec.className = 'subsection';
-    const header = document.createElement('div');
-    header.className = 'subsection-header';
-    header.innerHTML = `<span class="toggle-icon">▶</span><strong>${folder.name}</strong>`;
-
-    const btn = document.createElement('button');
-    btn.className = 'upload-btn'; btn.textContent = 'Upload';
-    const inp = document.createElement('input');
-    inp.type = 'file'; inp.multiple = true; inp.className = 'upload-input';
-    header.append(btn, inp);
-
-    const content = document.createElement('div');
-    content.style.display = 'none';
-
-    header.addEventListener('click', e => {
-      if (e.target === btn) return;
-      const open = content.style.display === 'block';
-      content.style.display = open ? 'none' : 'block';
-      header.querySelector('.toggle-icon').textContent = open ? '▶' : '▼';
-      if (!content.dataset.loaded) {
-        loadSubFiles(`/Shows/${folder.name}`, content);
-        content.dataset.loaded = '1';
-      }
-    });
-
-    btn.addEventListener('click', e => {
-      e.stopPropagation(); inp.click();
-    });
-
-    inp.addEventListener('change', async () => {
-      for (const file of inp.files) {
-        showGlobal('Uploading...');
-        gfile.textContent = file.name;
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `/upload-show?subdir=${encodeURIComponent(folder.name)}`);
-        xhr.upload.onprogress = e => updateGlobal(e.loaded/e.total*100);
-        xhr.onload = () => location.reload();
-        const fd = new FormData(); fd.append('file', file);
-        xhr.send(fd);
-      }
-      inp.value = '';
-    });
-
-    sec.append(header, content);
-    container.append(sec);
-  }
-}
-
-async function loadSubFiles(path, container) {
-  container.innerHTML = '';
-  const res = await fetch(`/listfiles?dir=${encodeURIComponent(path)}`);
-  const files = await res.json();
-  files.forEach(f => {
-    if (!f.isDir) container.append(makeFileEntry(path, f));
-  });
-}
-
-function makeFileEntry(path, file) {
-  const div = document.createElement('div');
-  div.className = 'file-entry';
-  div.innerHTML = `
-    <h4>${file.name} <span class="file-size">(${(file.size/1e6).toFixed(2)} MB)</span></h4>
-    <input class="rename-input" value="${file.name}">
-    <div>
-      <button class="rename-btn">Rename</button>
-      <button class="delete-btn">Delete</button>
+  <header>
+    <a href="http://192.168.4.1/menu" class="menu-button">Menu</a>
+    <h1>Nomad Admin Panel</h1>
+  </header>
+  <div class="admin-bar">
+    <button id="btn-restart">Restart Device</button>
+    <button id="btn-usbmode">USB MODE</button>
+    <div class="admin-info">
+      <div class="info-block">
+        <div class="label">SSID</div>
+        <div id="bar-ssid" class="value">—</div>
+      </div>
+      <div class="info-block">
+        <div class="label">Password</div>
+        <div id="bar-wifi-pass" class="value">—</div>
+      </div>
+      <div class="info-block">
+        <div class="label">Connected Users</div>
+        <div id="bar-users" class="value">—</div>
+      </div>
     </div>
-  `;
-  const input = div.querySelector('.rename-input');
-  div.querySelector('.rename-btn').onclick = async () => {
-    const newName = input.value.trim();
-    if (!newName || newName === file.name) return;
-    const fd = new FormData();
-    fd.append('oldname', `${path}/${file.name}`);
-    fd.append('newname', `${path}/${newName}`);
-    await fetch('/rename', { method: 'POST', body: fd });
-    location.reload();
-  };
-  div.querySelector('.delete-btn').onclick = async () => {
-    if (!confirm(`Delete ${file.name}?`)) return;
-    const fd = new FormData();
-    fd.append('filename', `${path}/${file.name}`);
-    await fetch('/delete', { method: 'POST', body: fd });
-    location.reload();
-  };
-  return div;
-}
+  </div>
+  <div class="container">
+    <div class="card">
+      <h2>SD Card Usage</h2>
+      <div id="sd-used">Used: -- GB</div>
+      <div id="sd-total">Total: -- GB</div>
+      <progress id="sd-bar" max="100" value="0"></progress>
+      <div id="sd-percent">--%</div>
+    </div>
 
-async function generateMedia() {
-  const msg = document.getElementById('generate-msg');
-  msg.textContent = 'Generating media.json... This may take a moment on large cards.';
-  try {
-    const res = await fetch('/generate-media', { method: 'POST' });
-    if (res.ok) {
-      msg.textContent = 'media.json generated successfully.';
-      setTimeout(() => location.reload(), 1000);
-    } else {
-      msg.textContent = 'Failed to generate media.json.';
+    <div class="card">
+      <h2>RGB Settings</h2>
+      <div class="rgb-buttons">
+        <button id="mode-off">Off</button>
+        <button id="mode-solid">Solid</button>
+        <button id="mode-rainbow">RGB</button>
+      </div>
+      <div class="color-input">
+        <input type="color" id="led-color" value="#ff0000" />
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Admin Password</h2>
+      <label for="new-password">New Password</label>
+      <input type="password" id="new-password">
+      <label for="confirm-password">Confirm Password</label>
+      <input type="password" id="confirm-password">
+      <button onclick="updateAdminPassword()">Set Password</button>
+      <button class="neutral" id="btn-disable-password">Disable Password</button>
+    </div>
+
+    <div class="card">
+      <h2>WiFi Settings</h2>
+      <label for="ssid">SSID</label>
+      <input type="text" id="ssid">
+      <label for="wifi-password">Password</label>
+      <input type="text" id="wifi-password">
+      <button onclick="updateWiFiSettings()">Update WiFi</button>
+    </div>
+
+    <div class="card">
+      <h2>LCD Brightness</h2>
+      <label for="brightness">Brightness</label>
+      <div class="brightness-wrapper">
+        <input
+          type="range"
+          id="brightness"
+          min="1"
+          max="100"
+          oninput="updateBrightnessLabel(this.value)"
+          onchange="setBrightness(this.value)"
+        >
+      </div>
+      <div id="brightness-percent">--%</div>
+    </div>
+
+    <div class="card">
+      <h2>Media JSON</h2>
+      <div class="toggle-container">
+        <button onclick="generateMediaJson()">Generate media.json</button>
+        <label for="auto-generate-toggle">Auto-generate on boot:</label>
+        <button id="auto-generate-toggle" class="toggle-btn">OFF</button>
+        <input type="checkbox" id="auto-generate" hidden />
+      </div>
+      </div>
+      <div id="generate-msg"></div>
+    </div>
+    <div class="card file-manager" id="file-browser-tab">
+      <h2>File Browser</h2>
+      <div class="file-manager-content">
+     
+        <div id="sidebar">
+          <h3>Files</h3>
+          <div id="file-tree">Loading…</div>
+        </div>
+
+      
+        <div id="controls" class="controls-section">
+          <h3>Actions</h3>
+          <div id="info">
+            <span id="info-label">No file selected</span><br>
+            <small id="info-type" style="color: var(--muted); font-size: 0.85rem;"></small>
+          </div>
+          <div id="actions" class="button-stack">
+            <button id="btn-new-folder" class="neutral">New Folder</button>
+            <button id="btn-upload" class="primary">Upload</button>
+            <input type="file" id="upload-input" style="display: none;" />
+            <button id="btn-rename" class="neutral">Rename</button>
+            <button id="btn-delete" class="danger">Delete</button>
+            <button id="btn-download" class="neutral">Download</button>
+            <button id="btn-edit" class="primary">Edit</button>
+          </div>
+          </div>
+          <div id="status"></div>
+          <div id="progressBar"></div>
+        </div>
+      </div>
+
+   
+      <div id="editorModal">
+        <textarea id="editorContent" style="width:100%; height:calc(100% - 40px); font-family: monospace; font-size: 14px; border:1px solid #444; background:#111; color:#eee; border-radius:8px;"></textarea>
+        <div style="text-align:right; margin-top:0.5rem;">
+          <button id="btn-save-editor" class="primary">Save</button>
+          <button id="btn-close-editor" class="neutral">Close</button>
+        </div>
+      </div>
+    </div>
+
+
+  <script>
+    async function fetchSD() {
+      try {
+        const res = await fetch('/sdinfo');
+        const { total, used } = await res.json();
+        document.getElementById('sd-total').textContent = `Total: ${(total/1e9).toFixed(2)} GB`;
+        document.getElementById('sd-used').textContent = `Used: ${(used/1e9).toFixed(2)} GB`;
+        const percent = Math.round((used / total) * 100);
+        document.getElementById('sd-bar').value = percent;
+        document.getElementById('sd-percent').textContent = `${percent}%`;
+      } catch {}
     }
-  } catch (e) {
-    msg.textContent = 'Error contacting server.';
-  }
-}
-  // Elements
-  const colorPicker = document.getElementById('led-color');
-  const modeButtons = {
-    off: document.getElementById('mode-off'),
-    solid: document.getElementById('mode-solid'),
-    rainbow: document.getElementById('mode-rainbow'),
-  };
+    
+async function loadSettings() {
+  console.log("loadSettings() fired");
+  try {
+    const res = await fetch('/settings');
+    const s   = await res.json();
+    console.log("settings from backend:", s);
 
-  let ledMode = 'off';
-
-  function updateModeUI(mode) {
-    ledMode = mode;
-    for (const [key, btn] of Object.entries(modeButtons)) {
-      if (key === mode) {
-        btn.classList.add('active');
-        btn.setAttribute('aria-pressed', 'true');
+    if (s.adminPassword && s.adminPassword.trim() !== "") {
+      // Check if flag is set
+      if (localStorage.getItem("nomad_admin_logged_in") === "true") {
+        console.log("🔓 Admin session already authenticated, skipping overlay.");
       } else {
-        btn.classList.remove('active');
-        btn.setAttribute('aria-pressed', 'false');
+        console.log("🔒 adminPassword is set, kicking off password gate");
+
+        const pwOverlay = document.getElementById('pw-overlay');
+        const pwInput = document.getElementById('pw-input');
+        const pwSubmit = document.getElementById('pw-submit');
+        const pwError = document.getElementById('pw-error');
+
+        pwOverlay.classList.remove('hidden');
+        pwInput.value = '';
+        pwError.classList.add('hidden');
+        pwInput.focus();
+
+        let tries = 0;
+
+        await new Promise((resolve, reject) => {
+          function tryPassword() {
+            const attempt = pwInput.value;
+            if (!attempt) {
+              pwError.textContent = "Please enter a password.";
+              pwError.classList.remove('hidden');
+              return;
+            }
+            if (attempt === s.adminPassword) {
+              pwError.classList.add('hidden');
+              pwOverlay.classList.add('hidden');
+              localStorage.setItem("nomad_admin_logged_in", "true"); 
+              pwSubmit.removeEventListener('click', submitHandler);
+              pwInput.removeEventListener('keyup', keyHandler);
+              resolve();
+            } else {
+              tries++;
+              pwError.textContent = "Incorrect password, try again.";
+              pwError.classList.remove('hidden');
+              pwInput.value = '';
+              pwInput.focus();
+
+              if (tries >= 5) {
+                pwSubmit.removeEventListener('click', submitHandler);
+                pwInput.removeEventListener('keyup', keyHandler);
+                alert("Too many incorrect attempts. Reloading page.");
+                reject();
+                location.reload();
+              }
+            }
+          }
+
+          function submitHandler(e) {
+            e.preventDefault();
+            tryPassword();
+          }
+
+          function keyHandler(e) {
+            if (e.key === "Enter") {
+              tryPassword();
+            }
+          }
+
+          pwSubmit.addEventListener('click', submitHandler);
+          pwInput.addEventListener('keyup', keyHandler);
+        });
       }
     }
 
-    colorPicker.disabled = (mode !== 'solid');
-  }
 
-  async function sendModeToServer(mode) {
-    if (mode === 'off') {
-      await fetch('/led/onoff', {
+        // ── Wi‑Fi SSID ────
+        document.getElementById('ssid').value = s.wifiSSID || '';
+        // ── Wi‑Fi Password ───
+        document.getElementById('wifi-password').value = s.wifiPassword || '';
+        // ── RGB Settings ────
+        console.log('ℹ️ loadSettings rgbMode:', s.rgbMode, 'rgbColor:', s.rgbColor);
+        // sync global state
+        ledMode = s.rgbMode || 'off';
+        // highlight correct button
+        updateModeUI(ledMode);
+        // set the color picker to saved value
+        document.getElementById('led-color').value = s.rgbColor || '#ff0000';
+        
+        // ── Brightness Mapping ──
+        console.log('⚙️ Loaded brightness from settings.json:', s.brightness);
+        
+        // Clamp backend value to 0–90
+        let stored = (typeof s.brightness === 'number')
+          ? Math.min(Math.max(s.brightness, 0), 90)
+          : 45;
+        
+        // Map 0–90 → slider 1–100: stored=0→1, stored=90→100
+        const sliderVal = Math.round((stored / 90) * 99) + 1;
+        
+        // Apply to slider and label
+        const brEl = document.getElementById('brightness');
+        brEl.value = sliderVal;
+        updateBrightnessLabel(sliderVal);
+        
+        // ── Auto‑Generate Media Toggle ───
+        isAutoGenerate = s.autoGenerateMedia || false;
+        updateToggle();
+        document.getElementById('auto-generate').checked = isAutoGenerate;
+        
+      } catch (e) {
+        console.error('loadSettings failed:', e);
+      }
+    }
+
+
+    // Gather all settings from UI and POST to /settings
+    async function saveSettings() {
+      // read slider 1–100
+      const sliderVal = parseInt(document.getElementById('brightness').value, 10);
+      // map to 0–90
+      const backendBrightness = Math.round((sliderVal / 100) * 90);
+      const payload = {
+        wifiSSID:           document.getElementById('ssid').value,
+        // wifiPassword is handled by updateWiFiSettings()
+        rgbMode:            ledMode,                      // current mode ('off','solid','rainbow')
+        rgbColor:           document.getElementById('led-color').value,
+        brightness:        backendBrightness,
+        autoGenerateMedia: isAutoGenerate
+      };
+
+      // include Wi‑Fi password only if the user just updated it
+      if (window._pendingWifiPassword) {
+        payload.wifiPassword = window._pendingWifiPassword;
+        window._pendingWifiPassword = null;
+      }
+      // include adminPassword only if set via updateAdminPassword()
+      if (window._pendingAdminPassword !== undefined) {
+        payload.adminPassword = window._pendingAdminPassword;
+        window._pendingAdminPassword = undefined;
+      }
+
+
+      const body = encodeURIComponent(JSON.stringify(payload));
+      const res = await fetch('/settings', {
         method: 'POST',
-        body: JSON.stringify({ enabled: false }),
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `body=${body}`
       });
-    } else if (mode === 'solid') {
-      await fetch('/led/onoff', {
-        method: 'POST',
-        body: JSON.stringify({ enabled: true }),
-        headers: { 'Content-Type': 'application/json' }
+      if (!res.ok) console.error('saveSettings failed', await res.text());
+    }
+    function setRGBMode(mode) {
+      updateModeUI(mode);       // highlight the correct button
+      ledMode = mode;           // track current mode
+      sendModeToServer(mode);   // immediately apply on-device
+      saveSettings();           // persist to settings.json
+    }
+
+    function setSolidColor(color) {
+      // update picker UI
+      document.getElementById('led-color').value = color;
+      sendColorToServer(color);  // immediately apply on device
+      saveSettings();            // persist to settings.json
+    }
+
+    function updateAdminPassword() {
+      const pass    = document.getElementById('new-password').value;
+      const confirm = document.getElementById('confirm-password').value;
+      if (pass !== confirm) {
+        alert('Passwords do not match.');
+        return;
+      }
+      // stash for saveSettings()
+      window._pendingAdminPassword = pass;
+      localStorage.removeItem("nomad_admin_logged_in");  
+      saveSettings();
+      alert('Admin password updated.');
+    }
+    document.getElementById("btn-disable-password").addEventListener("click", () => {
+      if (confirm("Are you sure you want to disable the admin password?\nThis will make the admin panel accessible without authentication.")) {
+        window._pendingAdminPassword = "";
+        localStorage.removeItem("nomad_admin_logged_in");  
+        saveSettings();
+        alert("Admin password disabled.");
+      }
+    });
+    function updateWiFiSettings() {
+      if (!confirm(
+        "⚠️ Changing Wi‑Fi requires a restart.\n\n" +
+        "Are you sure you want to apply these changes?"
+      )) {
+        return;  
+      }
+
+      // stash the password…
+      window._pendingWifiPassword = document.getElementById('wifi-password').value;
+      // immediately apply…
+      if (typeof WiFi !== 'undefined' && WiFi.softAP) {
+        WiFi.softAP(
+          document.getElementById('ssid').value,
+          window._pendingWifiPassword
+        );
+      }
+      // persist everything
+      saveSettings();
+    }
+
+
+    async function fetchWiFiSettings() {
+      try {
+        const res = await fetch('/wifi-settings');
+        const data = await res.json();
+        document.getElementById('auto-generate').checked = data.autoGenerate || false;
+      } catch {}
+    }
+
+    function setBrightness(val) {
+      console.log('Set brightness to:', val);
+      saveSettings();  // persist new brightness
+    }
+
+    async function generateMediaJson() {
+      if (!confirm("⚠️ This will regenerate media.json and restart the device.\n\nPlease reconnect and reload the page after reboot.\n\nProceed?")) {
+        return; // User canceled
+      }
+
+      const msg = document.getElementById('generate-msg');
+      msg.textContent = 'Generating media.json...';
+
+      try {
+        // Trigger the POST request; device will reboot, so no reliable response expected
+        await fetch('/generate-media', { method: 'POST' });
+
+        // Optionally clear or update message here, but device reboot means page will reload later
+        msg.textContent = 'media.json generation started; device will reboot.';
+      } catch {
+        msg.textContent = 'Error contacting server, Reconnect.';
+      }
+    }
+
+
+    function toggleAutoGenerate(enabled) {
+      saveSettings();  // persist the new autoGenerateMedia flag
+    }
+
+    fetchSD();
+    fetchWiFiSettings();
+    setInterval(fetchSD, 30000);
+    setInterval(fetchWiFiSettings, 30000);
+  // ===== File Manager Logic =====
+  $(function () {
+    let selectedPath = null;
+    let isDirectory = false;
+    let openDirs = new Set();
+
+    function showStatus(msg, color = "#007bff") {
+      $('#status').text(msg).css('color', color);
+    }
+
+    function resetProgressBar() {
+      $('#progressBar').css('width', '0%');
+    }
+
+    function reloadTree(action = 'Refreshed') {
+      initTree();
+    
+      setTimeout(() => {
+        openDirs.forEach(path => {
+          const $a = $(`#file-tree a[rel="${path}"]`);
+          if ($a.length && !$a.hasClass('expanded')) {
+            $a.trigger('click');
+          }
+        });
+    
+        if (selectedPath) {
+          const $sel = $(`#file-tree a[rel="${selectedPath}"]`);
+          if ($sel.length) {
+            $sel.parent().addClass('selected');
+            updateControls();
+          }
+        }
+    
+        showStatus(`${action}.`);
+      }, 400);
+    }
+
+
+    function initTree() {
+
+      $('#file-tree').empty();
+      
+
+      $('#file-tree').fileTree({
+        root: '/',
+        script: '/connector',
+        multiFolder: false,
+        folderEvent: 'click'  
+      }, function(path) {
+     
+        selectPath(path, false);
       });
-      await sendColorToServer(colorPicker.value);
-    } else if (mode === 'rainbow') {
-      await fetch('/led/onoff', {
-        method: 'POST',
-        body: JSON.stringify({ enabled: true }),
-        headers: { 'Content-Type': 'application/json' }
+      
+ 
+      $('#file-tree').off('click', 'li.directory > a');
+      
+
+      $('#file-tree').on('click', 'li.directory > a', function(e) {
+        e.preventDefault();
+        const $link   = $(this);
+        const relPath = $link.attr('rel');
+        
+
+        selectPath(relPath, true);
+
+        if ($link.hasClass('expanded')) {
+          $link
+            .removeClass('expanded')
+            .addClass('collapsed')
+            .siblings('ul')
+            .slideUp(150, () => openDirs.delete(relPath));
+          return;
+        }
+
+        if ($link.hasClass('collapsed')) {
+          $link
+            .removeClass('collapsed')
+            .addClass('expanded');
+          // fetch children
+          $('<ul></ul>')
+            .appendTo($link.parent())
+            .hide()
+            .load('/connector', { dir: relPath }, function() {
+              $(this).slideDown(150, () => openDirs.add(relPath));
+            });
+          return;
+        }
+        
+        $link.addClass('expanded');
+        $('<ul></ul>')
+          .appendTo($link.parent())
+          .hide()
+          .load('/connector', { dir: relPath }, function() {
+            $(this).slideDown(150, () => openDirs.add(relPath));
+          });
       });
-      await fetch('/led/rainbow', { method: 'POST' });
+    }
+
+
+    function selectPath(path, isDir) {
+      selectedPath = path;
+      isDirectory = isDir;
+
+      $('#file-tree .selected').removeClass('selected');
+      $(`#file-tree a[rel="${path}"]`).parent().addClass('selected');
+      updateControls();
+    }
+
+    function updateControls() {
+      if (!selectedPath) {
+        $('#info-label').text('📁 Please select a folder or file');
+        $('#info-type').text('');
+        $('#btn-rename,#btn-delete,#btn-download,#btn-edit').prop('disabled', true);
+      } else {
+        const name = selectedPath.split('/').filter(Boolean).pop();
+        const icon = isDirectory ? '📁' : '📄';
+        $('#info-label').text(`${icon} ${name}`);
+        $('#info-type').text(isDirectory ? 'Folder' : 'File');
+
+        $('#btn-rename,#btn-delete').prop('disabled', false);
+        $('#btn-download').prop('disabled', isDirectory);
+
+        const editable = /\.(html|json|txt|md)$/i.test(name) && !isDirectory;
+        $('#btn-edit').prop('disabled', !editable);
+      }
+    }
+
+
+    // ----- Handlers -----
+
+    // New Folder
+    $('#btn-new-folder').click(() => {
+      const name = prompt('Folder name:');
+      if (!name) return;
+      const fd = new FormData();
+      fd.append('dirname', (isDirectory ? selectedPath : '/') + name + '/');
+      fetch('/mkdir', { method: 'POST', body: fd })
+        .then(r => {
+            if (r.ok) {
+              reloadTree('Folder created');
+            } else return Promise.reject();
+        })
+        .catch(() => showStatus('Create folder failed', 'red'));
+    });
+
+    // Upload
+    $('#btn-upload').click(() => $('#upload-input').click());
+    $('#upload-input').change(function () {
+      const file = this.files[0];
+      if (!file) return;
+      const uploadPath = isDirectory ? selectedPath : '/';
+      const fd = new FormData();
+      fd.append('dir', uploadPath);
+      fd.append('file', file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/upload', true);
+        $('#progressBar')
+          .stop(true)
+          .show()
+          .css({ width: '0%' });
+        
+        // update during upload
+        xhr.upload.onprogress = e => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            $('#progressBar').css('width', pct + '%');
+          }
+        };
+        
+        // always hide & reset after completion
+        xhr.onloadend = () => {
+          setTimeout(() => {
+            $('#progressBar')
+              .fadeOut(200, function () { $(this).css('width', '0%'); });
+          }, 300);
+        };
+        
+        xhr.onload = () => {
+            if (xhr.status === 200) {
+              reloadTree(`Uploaded "${file.name}"`);
+            } else showStatus('Upload failed', 'red');
+        };
+        xhr.onerror = () => {
+          showStatus('Upload error', 'red');
+        };
+
+      showStatus('Uploading…');
+      xhr.send(fd);
+      this.value = '';
+    });
+
+    // Rename
+    $('#btn-rename').click(() => {
+      const base = selectedPath.replace(/\/$/, '').split('/').pop();
+      const name = prompt('Rename to:', base);
+      if (!name || name === base) return;
+      const newPath = selectedPath.replace(/[^\/]+\/?$/, name + (isDirectory ? '/' : ''));
+      const fd = new FormData();
+      fd.append('oldname', selectedPath);
+      fd.append('newname', newPath);
+      fetch('/rename', { method: 'POST', body: fd })
+        .then(r => {
+            if (r.ok) {
+              reloadTree('Renamed');
+            } else return Promise.reject();
+        })
+        .catch(() => showStatus('Rename failed', 'red'));
+    });
+
+    // Delete
+    $('#btn-delete').click(() => {
+      if (!confirm(`Delete ${selectedPath}?`)) return;
+      const fd = new FormData();
+      fd.append('filename', selectedPath);
+      fetch('/delete', { method: 'POST', body: fd })
+        .then(r => {
+            if (r.ok) {
+              reloadTree('Deleted');
+            } else return Promise.reject();
+        })
+        .catch(() => showStatus('Delete failed', 'red'));
+    });
+
+    // Download
+    $('#btn-download').click(() => {
+      if (selectedPath && !isDirectory) {
+        const link = document.createElement('a');
+        link.href = selectedPath;
+        link.download = selectedPath.split('/').pop();
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    });
+
+    // Edit
+    $('#btn-edit').click(() => {
+      fetch(selectedPath + '?_=' + new Date().getTime())
+        .then(r => r.text())
+        .then(data => {
+          $('#editorContent').val(data);
+          $('#editorModal').show();
+        });
+    });
+    $('#btn-close-editor').click(() => $('#editorModal').hide());
+
+    // Save Edited File
+    $('#btn-save-editor').click(() => {
+      const fd = new FormData();
+      fd.append('filename', selectedPath);
+      fd.append('content', $('#editorContent').val());
+      fetch('/save', { method: 'POST', body: fd })
+        .then(r => {
+            if (!r.ok) throw new Error();
+            $('#editorModal').hide();
+            reloadTree('File saved');
+        })
+        .catch(() => showStatus('Save failed', 'red'));
+    });
+    // Prevent scroll-to-top when clicking on file/folder links
+    $('#file-tree').on('click', 'a', function (e) {
+      e.preventDefault();
+    });
+    // Initialize
+    initTree();
+    updateControls();
+  });
+
+// LED Control Elements
+const colorPicker = document.getElementById('led-color');
+const modeButtons = {
+  off: document.getElementById('mode-off'),
+  solid: document.getElementById('mode-solid'),
+  rainbow: document.getElementById('mode-rainbow'),
+};
+
+let ledMode = 'off';
+
+function updateModeUI(mode) {
+  ledMode = mode;
+  for (const [key, btn] of Object.entries(modeButtons)) {
+    if (key === mode) {
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
+    } else {
+      btn.classList.remove('active');
+      btn.setAttribute('aria-pressed', 'false');
     }
   }
+  colorPicker.disabled = (mode !== 'solid');
+}
 
-  async function sendColorToServer(color) {
-    await fetch('/led/color', {
+async function sendModeToServer(mode) {
+  if (mode === 'off') {
+    await fetch('/led/onoff', {
       method: 'POST',
-      body: JSON.stringify({ color }),
+      body: JSON.stringify({ enabled: false }),
       headers: { 'Content-Type': 'application/json' }
     });
+  } else if (mode === 'solid') {
+    await fetch('/led/onoff', {
+      method: 'POST',
+      body: JSON.stringify({ enabled: true }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    await sendColorToServer(colorPicker.value);
+  } else if (mode === 'rainbow') {
+    await fetch('/led/onoff', {
+      method: 'POST',
+      body: JSON.stringify({ enabled: true }),
+      headers: { 'Content-Type': 'application/json' }
+    });
+    await fetch('/led/rainbow', { method: 'POST' });
+  }
+}
+
+async function sendColorToServer(color) {
+  await fetch('/led/color', {
+    method: 'POST',
+    body: JSON.stringify({ color }),
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+// Event Listeners
+colorPicker.addEventListener('input', () => {
+  if (ledMode === 'solid') {
+    sendColorToServer(colorPicker.value);
+  }
+});
+
+modeButtons.off.addEventListener('click', async () => {
+  updateModeUI('off');
+  await sendModeToServer('off');
+});
+
+modeButtons.solid.addEventListener('click', async () => {
+  updateModeUI('solid');
+  await sendModeToServer('solid');
+});
+
+modeButtons.rainbow.addEventListener('click', async () => {
+  updateModeUI('rainbow');
+  await sendModeToServer('rainbow');
+});
+
+// Initialize UI state on load
+updateModeUI('off');
+function updateBrightnessLabel(val) {
+
+  document.getElementById('brightness-percent').textContent = `${val}%`;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  // Attach RGB button clicks
+  document.getElementById('mode-off').onclick    = () => setRGBMode('off');
+  document.getElementById('mode-solid').onclick  = () => setRGBMode('solid');
+  document.getElementById('mode-rainbow').onclick= () => setRGBMode('rainbow');
+
+  // Attach color‑picker change
+  document.getElementById('led-color').onchange = e => setSolidColor(e.target.value);
+  const brightnessSlider = document.getElementById('brightness');
+  updateBrightnessLabel(brightnessSlider.value);
+
+  async function fetchAdminBar() {
+    try {
+      const res = await fetch('/admin-status');
+      const data = await res.json();
+
+      document.getElementById('bar-ssid').textContent      = data.ssid      || '—';
+      document.getElementById('bar-wifi-pass').textContent = data.wifiPassword || '—';
+      document.getElementById('bar-users').textContent = 
+        typeof data.users === 'number' ? `${data.users} connected` : 'none';
+    } catch (e) {
+      console.error('Could not load admin bar:', e);
+    }
   }
 
-  colorPicker.addEventListener('input', () => {
-    if (ledMode === 'solid') {
-      sendColorToServer(colorPicker.value);
+  // Hook restart button
+  document.getElementById('btn-restart').addEventListener('click', async () => {
+    if (!confirm('⚠️ Are you sure you want to restart the device?')) return;
+    try {
+      await fetch('/restart', { method: 'POST' });
+      alert('Restart command sent. The device will reboot shortly.');
+    } catch {
+      alert('Failed to send restart command.');
     }
   });
 
-  modeButtons.off.addEventListener('click', async () => {
-    updateModeUI('off');
-    await sendModeToServer('off');
+  // USB MODE button
+  document.getElementById('btn-usbmode').addEventListener('click', async () => {
+    const ok = confirm(
+      '⚠️ This will restart the device into USB Transfer mode. It can take more than 60 secounds to mount\n\n' +
+      'To exit USB mode, you must unplug and re-plug the device.\n\n' +
+      'Proceed?'
+    );
+    if (!ok) return;
+    try {
+      await fetch('/enterUsb', { method: 'POST' });
+      alert('USB-mode command sent. The device will reboot into USB MSC mode.');
+    } catch {
+      alert('Web server closed.');
+    }
   });
 
-  modeButtons.solid.addEventListener('click', async () => {
-    updateModeUI('solid');
-    await sendModeToServer('solid');
+
+  // Fetch bar info on load & every 30s
+  fetchAdminBar();
+  setInterval(fetchAdminBar, 30000);
+});
+
+const toggleBtn = document.getElementById("auto-generate-toggle");
+let isAutoGenerate = false;  
+
+function updateToggle() {
+  toggleBtn.textContent = isAutoGenerate ? "ON" : "OFF";
+  toggleBtn.classList.toggle("off", !isAutoGenerate);
+}
+
+
+function initToggle() {
+  updateToggle();
+  document.getElementById('auto-generate').checked = isAutoGenerate;
+}
+
+toggleBtn.addEventListener("click", () => {
+  isAutoGenerate = !isAutoGenerate;
+  updateToggle();
+  document.getElementById('auto-generate').checked = isAutoGenerate;
+  saveSettings();
+});
+
+
+  // ─── ADMIN AUTH OVERLAY LOGIC ──
+  const pwOverlay = document.getElementById('pw-overlay');
+  const pwInput   = document.getElementById('pw-input');
+  const pwError   = document.getElementById('pw-error');
+  const pwSubmit  = document.getElementById('pw-submit');
+
+  async function checkAdminPassword(password) {
+    const res = await fetch('/admin-check', {
+      method: 'GET',
+      headers: { 'X-Admin-Auth': password }
+    });
+    return res.status === 200;
+  }
+
+  pwSubmit.addEventListener('click', async () => {
+    pwError.classList.add('hidden');
+    const pass = pwInput.value;
+    if (!pass) return;
+    const ok = await checkAdminPassword(pass);
+    if (ok) {
+  
+      pwOverlay.classList.add('hidden');
+      // Store token for future fetches
+      window.adminToken = pass;
+    } else {
+      pwError.classList.remove('hidden');
+      pwInput.value = '';
+      pwInput.focus();
+    }
   });
 
-  modeButtons.rainbow.addEventListener('click', async () => {
-    updateModeUI('rainbow');
-    await sendModeToServer('rainbow');
+  // Focus the input on page load
+  window.addEventListener('DOMContentLoaded', () => {
+    pwInput.focus();
   });
 
-  // Initialize state
-  updateModeUI('off');
 </script>
 </body>
 </html>
