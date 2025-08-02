@@ -17,23 +17,111 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 
 ---
 
+##  Polish Update Disclaimer
+
+This is a major update focused on **polish, stability, and usability improvements**.  
+It includes:
+
+- Full cleanup of reported bugs  
+- Improved user interface  
+- Rebuilt admin panel  
+- New features across every section  
+- All configuration options now available in the **frontend** — no need to modify firmware to change settings  
+- Greatly enhanced file and media support  
+
+---
+
+## New Features in the Polish Update
+
+###  Music Page
+
+- Song downloads
+- Loop songs 
+- Sort songs A–Z
+- Shuffle songs and playlists
+- Playlist support via subfolders (flexible usage)
+- Playlists loop automatically
+- Expanded file type support: tested with `.mp3`, `.wav`, and `.flac` (others may work, untested)
+
+###  Books Page
+
+- EPUB support added (no web reader yet, but download works)
+- Fixed footer CSS display issue
+
+###  Admin Panel (Completely Rebuilt)
+
+- Restart the device directly from the panel
+- Switch to USB Mass Storage Mode with one click
+- SD card usage tracking with visual indicators
+- Control RGB LED color and mode
+- Change or disable the admin password (for admin page access) (default is "password")
+- Change Wi-Fi SSID and password
+- Set device brightness (off option coming soon)
+- Toggle `media.json` auto-generation on boot
+- Generate `media.json` manually
+- Display connected Wi-Fi info and number of connected users
+- Integrated file system browser with jQueryFileTree:
+  - Upload, delete, rename, download, create folder, and edit files (basic inline code editor)
+  - Improved UX over the original browser, but still allows dangerous deletions, use with care.
+
+###  Gallery Page (New)
+
+- Displays images with basic zoom functionality
+- Video playback support
+- Sortable display grid
+
+###  Files Page (New)
+
+- Lets you store and download any file type
+- Still limited to FAT32 file size limit (4 GB max)
+- Useful for sharing non-media files like firmware, PDFs, etc.
+
+###  Interface + UI Improvements
+
+- LCD now displays “USB Mass Storage Mode” clearly — no more frozen screen confusion
+- `media.json` generation displays file names in real-time on screen
+- More intuitive screen feedback during long operations
+
+###  File Type & Playback Support
+
+- Improved video file detection and browser compatibility
+- Works with almost all browser-supported video types
+- Unsupported files fall back to download behavior
+
+###  Admin Access Notes
+
+- A new "Settings" button on the top-right of the menu screen leads to the Admin Panel
+- Default admin password is `"password"`
+- If locked out, inspect (F12) the overlay and delete it manually to regain access
+- All settings now persist across reboots
+
+---
 
 ## Experimental Branch Enhancements
 
-This branch includes several experimental features not yet available in `main`. These are actively being tested and refined:
+This branch includes all current features being tested for stability before merging into `main`.
 
-- **OPDS eBook Support** - Connect with eBook readers and track reading progress.
-- **Minimal M3U-based DLNA Support** - Allows media discovery on VLC and some Smart TVs.
-- **Admin Page** - Upload, rename, and delete files directly in the browser.
-- **RGB LED Controls** - Change colors and patterns remotely.
-- **Improved Web UI** - Cleaner layout and more responsive mobile design.
-- **Storage Status Display** - View available SD card space on the interface.
-- **Better Video Quality Support** - Preliminary improvements for high-bitrate playback.
-- **SD Card Recovery** Slow or low quality SD cards can have read failures when they get too hot, or too many requsts. Adds recovery function so users shouldnt see this happen on the frontend anymore. 
-- **UI Updates** Squareline studio files are in /docs, you can use it to customize the LCD display. I also made it so the SSID actualy reflects the one in settings automaticaly. Finaly the bar at the top of the screen shows how full the SD card is!
-- **UBS MSC Mode** - Allows users to click the "boot" button and have the device switch into USB mode. This shuts down the webserver and mounts it via usb as a mass storage device. Its slow, but more reliable than the web server wireless method. expect 355mb/s-700mb/s for now. 
+### Key Features
 
-Use this branch if you want the latest features and don't mind the occasional rough edge.
+- Admin panel with controls for restart, USB mode, Wi-Fi, RGB, brightness, password, and media generation
+- Frontend-based configuration (no firmware edits required)
+- Full file system browser with upload, rename, delete, and inline editing
+- Music player with playlist support, shuffle, loop, downloads, and file sorting
+- Expanded audio format support (MP3, WAV, FLAC, and others)
+- Books section with PDF support (and limited Epub support)
+- Gallery page for browsing images and video playback
+- Files page for general-purpose file sharing and downloads
+- Media.json generation with live progress shown on screen
+- LCD interface with USB mode status and SD card usage display
+- Captive portal for easy user access
+- OPDS support for eBook integration
+- Basic DLNA support for media discovery on supported devices
+- Custom UI built with SquareLine Studio
+- Persistent settings stored across reboots
+- Improved mobile-friendly web UI
+
+Use this branch if you want the most up to date features, improved stability, and a much more polished experience. While still under active development, this is now the recommended version for most users and I will be pushing it to main after a few days of user testing. 
+
 
 ---
 
@@ -218,9 +306,6 @@ Similar to [Gams Offline](https://github.com/Gams-Offline/Gams), I would like to
 
 ### Audiobook-Friendly Mode
 Improve playback for long-form audio by adding bookmarks, chapter display, and smart pause/resume. Intended for better audiobook handling in the Music section. Potentialy add an entire new audiobook section or a seperate handling system for it in books (Under read it could have a listen option).
-
-### File Upload Over USB
-Enable USB mass storage or dual-mode operation to allow users to drag and drop files directly to the SD card without removing it. This may require dynamic switching between USB and Wi-Fi server modes, or dual-core task handling. I worked on this for a long while, but couldnt find a relible way to have it switch modes and still function, usualy crashes trying to reboot media, I also wasnt able to get it to run the python script to generate media.json, a new system would be needed.
 
 ---
 
