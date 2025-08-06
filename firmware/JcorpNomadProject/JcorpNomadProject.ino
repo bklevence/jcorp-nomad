@@ -306,13 +306,6 @@ void updateClientCount() {
         updateUI(connectedClients);
     }
 }
-// Utility: check if file has a valid extension
-bool isValidExtension(const String& name, const std::vector<String>& exts) {
-    for (const auto& ext : exts) {
-        if (name.endsWith(ext)) return true;
-    }
-    return false;
-}
 
 // Utility: extract base name (no path, no extension)
 String getFileBaseName(const String& name) {
@@ -321,359 +314,261 @@ String getFileBaseName(const String& name) {
     if (dotIndex != -1) base = base.substring(0, dotIndex);
     return base;
 }
+bool isValidExtension(const String& filename, const std::vector<String>& exts) {
+  String nameLower = filename;
+  nameLower.toLowerCase();
+  for (const auto& ext : exts) {
+    if (nameLower.endsWith(ext)) return true;
+  }
+  return false;
+}
 
 void generateMediaJSON() {
-  // ─── 1) Open the JSON file ───
-  File jsonFile = SD_MMC.open("/media.json", FILE_WRITE);
-  if (!jsonFile) {
-    Serial.println("[MediaGen] ERROR: cannot open media.json for writing");
-    return;
-  }
+    // ─── 1) Open the JSON file ───
+    File jsonFile = SD_MMC.open("/media.json", FILE_WRITE);
+    if (!jsonFile) {
+        Serial.println("[MediaGen] ERROR: cannot open media.json for writing");
+        return;
+    }
 
-  // ─── 2) Write opening brace ───
-  jsonFile.println("{");
+    // ─── 2) Write opening brace ───
+    jsonFile.println("{");
 
-  // ─── 3) Prepare & show the MediaGen screen ───
-  lv_obj_clear_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
-  String logBuf;
-  int   logCount = 0;
-  const int LOG_UPDATE_INTERVAL = 20;
+    // ─── 3) Initialize LVGL status screen ───
+    lv_obj_clear_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
+    String logBuf = "Generating media.json...\n";
+    int logCount = 0;
+    const int LOG_UPDATE_INTERVAL = 20;
+    lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
+    lv_timer_handler();
 
-  logBuf = "⏳ Generating media.json...\n";
-  Serial.println("[MediaGen] Starting media.json generation");
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_timer_handler();
-
-  // ─── 4) Movies ───
-  jsonFile.println("  \"movies\": [");
-  File moviesDir = SD_MMC.open("/Movies");
-  bool firstMovie = true;
-  std::vector<String> movieExts = { ".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".wmv" };
-  while (File file = moviesDir.openNextFile()) {
-    yield();
-    if (!file.isDirectory() && isValidExtension(file.name(), movieExts)) {
-      if (!firstMovie) jsonFile.println(",");
-      firstMovie = false;
-      String nameStr = file.name();
-      String base    = getFileBaseName(nameStr);
-      String ext     = nameStr.substring(nameStr.lastIndexOf('.'));
-      String cover   = SD_MMC.exists("/Movies/" + base + ".jpg")
-                       ? "movies/" + base + ".jpg"
-                       : "placeholder.jpg";
-
-      jsonFile.print("    { \"name\": \"" + base +
-                     "\", \"cover\": \"" + cover +
-                     "\", \"file\": \"Movies/" + base + ext + "\" }");
-
-      // buffer log
-      logBuf += "- " + nameStr + "\n";
-      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
+    // Helper lambda to flush log
+    auto flushLog = [&]() {
         lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
         lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
         lv_timer_handler();
-      }
-    }
-  }
-  jsonFile.println();
-  jsonFile.println("  ],");
-
-  // ─── Movies complete: flush & clear ───
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-  lv_timer_handler();
-  delay(100);
-  logBuf = "";
-  logCount = 0;
-
-  // ─── 5) Shows ───
-  jsonFile.println("  \"shows\": [");
-  File showsRoot = SD_MMC.open("/Shows");
-  bool firstShow = true;
-  while (File folder = showsRoot.openNextFile()) {
-    yield();
-    if (folder.isDirectory()) {
-      if (!firstShow) jsonFile.println(",");
-      firstShow = false;
-      String folderName = folder.name();
-      String coverPath  = SD_MMC.exists("/Shows/" + folderName + ".jpg")
-                          ? "shows/" + folderName + ".jpg"
-                          : "placeholder.jpg";
-
-      jsonFile.println("    {\"name\": \"" + folderName +
-                       "\", \"cover\": \"" + coverPath +
-                       "\", \"episodes\": [");
-
-      logBuf += "\n🎬 " + folderName + "\n";
-      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-        lv_timer_handler();
-      }
-
-      File epFolder = SD_MMC.open("/Shows/" + folderName);
-      bool firstEp = true;
-      while (File ep = epFolder.openNextFile()) {
-        yield();
-        if (!ep.isDirectory() && isValidExtension(ep.name(), movieExts)) {
-          if (!firstEp) jsonFile.println(",");
-          firstEp = false;
-          String epNameStr = ep.name();
-          String epBase    = getFileBaseName(epNameStr);
-          String epExt     = epNameStr.substring(epNameStr.lastIndexOf('.'));
-
-          jsonFile.print("      { \"name\": \"" + epBase +
-                         "\", \"file\": \"Shows/" + folderName +
-                         "/" + epBase + epExt + "\" }");
-
-          logBuf += "   • " + epNameStr + "\n";
-          if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-            lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-            lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-            lv_timer_handler();
-          }
-        }
-      }
-      jsonFile.println();
-      jsonFile.println("    ]}");
-    }
-  }
-  jsonFile.println();
-  jsonFile.println("  ],");
-
-  // ─── Shows complete: flush & clear ───
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-  lv_timer_handler();
-  delay(100);
-  logBuf = "";
-  logCount = 0;
-
-  // ─── 6) Books ───
-  jsonFile.println("  \"books\": [");
-  File booksDir = SD_MMC.open("/Books");
-  bool firstBook = true;
-  std::vector<String> bookExts = { ".pdf", ".epub" };
-  while (File file = booksDir.openNextFile()) {
-    yield();
-    if (!file.isDirectory() && isValidExtension(file.name(), bookExts)) {
-      if (!firstBook) jsonFile.println(",");
-      firstBook = false;
-      String nameStr = file.name();
-      String base    = getFileBaseName(nameStr);
-      String ext     = nameStr.substring(nameStr.lastIndexOf('.'));
-      String cover   = SD_MMC.exists("/Books/" + base + ".jpg")
-                       ? "books/" + base + ".jpg"
-                       : "placeholder.jpg";
-
-      jsonFile.print("    { \"name\": \"" + base +
-                     "\", \"cover\": \"" + cover +
-                     "\", \"file\": \"Books/" + base + ext + "\" }");
-
-      logBuf += "- " + nameStr + "\n";
-      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-        lv_timer_handler();
-      }
-    }
-  }
-  jsonFile.println();
-  jsonFile.println("  ],");
-
-  // ─── Books complete: flush & clear ───
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-  lv_timer_handler();
-  delay(100);
-  logBuf = "";
-  logCount = 0;
-
-  // ─── 7) Music ───
-  jsonFile.println("  \"music\": [");
-  File musicDir = SD_MMC.open("/Music");
-  bool firstMusic = true;
-  std::vector<String> musicExts = { ".mp3", ".flac", ".wav", ".ogg", ".aac", ".m4a" };
-  while (File file = musicDir.openNextFile()) {
-    yield();
-    if (!file.isDirectory() && isValidExtension(file.name(), musicExts)) {
-      if (!firstMusic) jsonFile.println(",");
-      firstMusic = false;
-      String nameStr = file.name();
-      String base    = getFileBaseName(nameStr);
-      String ext     = nameStr.substring(nameStr.lastIndexOf('.'));
-      String cover   = SD_MMC.exists("/Music/" + base + ".jpg")
-                       ? "music/" + base + ".jpg"
-                       : "placeholder.jpg";
-
-      jsonFile.print("    { \"name\": \"" + base +
-                     "\", \"cover\": \"" + cover +
-                     "\", \"file\": \"Music/" + base + ext + "\" }");
-
-      logBuf += "- " + nameStr + "\n";
-      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-        lv_timer_handler();
-      }
-    }
-  }
-  jsonFile.println();
-  jsonFile.println("  ],");
-
-  // ─── Music complete: flush & clear ───
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-  lv_timer_handler();
-  delay(100);
-  logBuf = "";
-  logCount = 0;
-
-  // ─── 8) Playlists ───
-  jsonFile.println("  \"playlists\": {");
-  File musicRoot = SD_MMC.open("/Music");
-  bool firstPl = true;
-  while (File folder = musicRoot.openNextFile()) {
-    yield();
-    if (folder.isDirectory()) {
-      if (!firstPl) jsonFile.println(",");
-      firstPl = false;
-      String plName = folder.name();
-      jsonFile.println("    \"" + plName + "\": [");
-
-      logBuf += "\n🎵 " + plName + "\n";
-      if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-        lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-        lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-        lv_timer_handler();
-      }
-
-      std::vector<String> tracks;
-      std::function<void(File, const String&)> collectTracks =
-        [&](File dir, const String& relPath) {
-          while (File t = dir.openNextFile()) {
-            yield();
-            String full = relPath + "/" + String(t.name());
-            if (t.isDirectory()) {
-              collectTracks(SD_MMC.open("/Music/" + full), full);
-            } else if (isValidExtension(full, musicExts)) {
-              tracks.push_back(full);
-            }
-          }
-        };
-      collectTracks(SD_MMC.open("/Music/" + plName), plName);
-
-      for (size_t i = 0; i < tracks.size(); ++i) {
-        String tname = tracks[i].substring(tracks[i].lastIndexOf('/') + 1);
-        String base2  = getFileBaseName(tname);
-        String cover2 = SD_MMC.exists("/Music/" + base2 + ".jpg")
-                        ? "music/" + base2 + ".jpg"
-                        : "placeholder.jpg";
-
-        jsonFile.print("      { \"name\": \"" + base2 +
-                       "\", \"cover\": \"" + cover2 +
-                       "\", \"file\": \"Music/" + tracks[i] + "\" }");
-        if (i < tracks.size() - 1) jsonFile.println(",");
-
-        logBuf += "   • " + tname + "\n";
-        if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-          lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-          lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-          lv_timer_handler();
-        }
-      }
-      jsonFile.println();
-      jsonFile.println("    ]");
-    }
-  }
-  jsonFile.println("  },");
-
-  // ─── Playlists complete: flush & clear ───
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-  lv_timer_handler();
-  delay(100);
-  logBuf = "";
-  logCount = 0;
-
-  // ─── 9) Gallery ───
-  jsonFile.println("  \"gallery\": [");
-  {
-    File galleryDir = SD_MMC.open("/Gallery");
-    bool firstItem = true;
-    std::vector<String> mediaExts = {
-      ".jpg", ".jpeg", ".png", ".bmp", ".gif",
-      ".mp4",
-      ".webm", ".mov", ".avi", ".mkv"
+        logBuf = "";
+        logCount = 0;
     };
-    while (File f = galleryDir.openNextFile()) {
-      yield();
-      String fname = f.name();
-      if (!f.isDirectory() && isValidExtension(fname, mediaExts)) {
-        if (!firstItem) jsonFile.println(",");
-        firstItem = false;
-        String base = getFileBaseName(fname);
-        jsonFile.print("    {\"name\":\"" + base +
-                       "\",\"file\":\"Gallery/" + fname + "\"}");
-        logBuf += "- " + fname + "\n";
-        if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-          lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-          lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-          lv_timer_handler();
+
+    // ─── 4) Movies ───
+    jsonFile.println("  \"movies\": [");
+    File moviesDir = SD_MMC.open("/Movies");
+    bool firstMovie = true;
+    std::vector<String> movieExts = {".mp4", ".mkv", ".avi", ".mov", ".webm", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg", ".ts", ".3gp"};
+    while (File file = moviesDir.openNextFile()) {
+        yield();
+        String fname = String(file.name());
+        String ext = fname.substring(fname.lastIndexOf('.'));
+        ext.toLowerCase();
+        if (!file.isDirectory() && isValidExtension(fname, movieExts)) {
+            if (!firstMovie) jsonFile.println(",");
+            firstMovie = false;
+            String base = getFileBaseName(fname);
+            String cover = SD_MMC.exists("/Movies/" + base + ".jpg") ? "movies/" + base + ".jpg" : "placeholder.jpg";
+
+            jsonFile.print("    { \"name\": \"" + base + "\", \"cover\": \"" + cover + "\", \"file\": \"Movies/" + base + ext + "\" }");
+
+            logBuf += "- " + fname + "\n";
+            if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
         }
-      }
     }
     jsonFile.println();
-  }
-  jsonFile.println("  ],");
+    jsonFile.println("  ],");
+    flushLog();
 
-  // ─── Gallery complete: flush & clear ───
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-  lv_timer_handler();
-  delay(100);
-  logBuf = "";
-  logCount = 0;
+    // ─── 5) Shows ───
+    jsonFile.println("  \"shows\": [");
+    File showsRoot = SD_MMC.open("/Shows");
+    bool firstShow = true;
+    while (File folder = showsRoot.openNextFile()) {
+        yield();
+        if (folder.isDirectory()) {
+            if (!firstShow) jsonFile.println(",");
+            firstShow = false;
+            String showName = String(folder.name());
+            String cover = SD_MMC.exists("/Shows/" + showName + ".jpg") ? "shows/" + showName + ".jpg" : "placeholder.jpg";
 
-  // ─── 10) Files ───
-  jsonFile.println("  \"files\": [");
-  {
+            jsonFile.println("    {\"name\": \"" + showName + "\", \"cover\": \"" + cover + "\", \"episodes\": [");
+
+            logBuf += "Show: " + showName + "\n";
+            if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
+
+            File epDir = SD_MMC.open("/Shows/" + showName);
+            bool firstEp = true;
+            while (File ep = epDir.openNextFile()) {
+                yield();
+                String epName = String(ep.name());
+                String epExt = epName.substring(epName.lastIndexOf('.'));
+                epExt.toLowerCase();
+                if (!ep.isDirectory() && isValidExtension(epName, movieExts)) {
+                    if (!firstEp) jsonFile.println(",");
+                    firstEp = false;
+                    String epBase = getFileBaseName(epName);
+                    jsonFile.print("      { \"name\": \"" + epBase + "\", \"file\": \"Shows/" + showName + "/" + epBase + epExt + "\" }");
+
+                    logBuf += "  * " + epName + "\n";
+                    if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
+                }
+            }
+            jsonFile.println();
+            jsonFile.println("    ]}");
+        }
+    }
+    jsonFile.println();
+    jsonFile.println("  ],");
+    flushLog();
+
+    // ─── 6) Books ───
+    jsonFile.println("  \"books\": [");
+    File booksDir = SD_MMC.open("/Books");
+    bool firstBook = true;
+    std::vector<String> bookExts = {".pdf", ".epub", ".mobi", ".azw3", ".txt"};
+    while (File file = booksDir.openNextFile()) {
+        yield();
+        String fname = String(file.name());
+        String ext = fname.substring(fname.lastIndexOf('.'));
+        if (!file.isDirectory() && isValidExtension(fname, bookExts)) {
+            if (!firstBook) jsonFile.println(",");
+            firstBook = false;
+            String base = getFileBaseName(fname);
+            String cover = SD_MMC.exists("/Books/" + base + ".jpg") ? "books/" + base + ".jpg" : "placeholder.jpg";
+
+            jsonFile.print("    { \"name\": \"" + base + "\", \"cover\": \"" + cover + "\", \"file\": \"Books/" + base + ext + "\" }");
+
+            logBuf += "- " + fname + "\n";
+            if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
+        }
+    }
+    jsonFile.println();
+    jsonFile.println("  ],");
+    flushLog();
+
+    // ─── 7) Music ───
+    jsonFile.println("  \"music\": [");
+    File musicDir = SD_MMC.open("/Music");
+    bool firstMusic = true;
+    std::vector<String> musicExts = {".mp3", ".wav", ".flac"};
+    while (File file = musicDir.openNextFile()) {
+        yield();
+        String fname = String(file.name());
+        String ext = fname.substring(fname.lastIndexOf('.'));
+        ext.toLowerCase();
+        if (!file.isDirectory() && isValidExtension(fname, musicExts)) {
+            if (!firstMusic) jsonFile.println(",");
+            firstMusic = false;
+            String base = getFileBaseName(fname);
+            String cover = SD_MMC.exists("/Music/" + base + ".jpg") ? "music/" + base + ".jpg" : "placeholder.jpg";
+
+            jsonFile.print("    { \"name\": \"" + base + "\", \"cover\": \"" + cover + "\", \"file\": \"Music/" + base + ext + "\" }");
+
+            logBuf += "- " + fname + "\n";
+            if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
+        }
+    }
+    jsonFile.println();
+    jsonFile.println("  ],");
+    flushLog();
+
+    // ─── 8) Playlists ───
+    jsonFile.println("  \"playlists\": {");
+    File musicRoot = SD_MMC.open("/Music");
+    bool firstPl = true;
+    while (File folder = musicRoot.openNextFile()) {
+        yield();
+        if (folder.isDirectory()) {
+            if (!firstPl) jsonFile.println(",");
+            firstPl = false;
+            String plName = String(folder.name());
+            jsonFile.println("    \"" + plName + "\": [");
+
+            logBuf += "Playlist: " + plName + "\n";
+            if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
+
+            std::vector<String> tracks;
+            std::function<void(File,const String&)> collectTracks =
+                [&](File dir, const String& rel) {
+                    while (File t = dir.openNextFile()) {
+                        yield();
+                        String name = rel + "/" + String(t.name());
+                        if (t.isDirectory()) collectTracks(SD_MMC.open("/Music/" + name), name);
+                        else if (isValidExtension(name, musicExts)) tracks.push_back(name);
+                    }
+                };
+            collectTracks(SD_MMC.open("/Music/" + plName), plName);
+
+            for (size_t i = 0; i < tracks.size(); ++i) {
+                String tname = tracks[i].substring(tracks[i].lastIndexOf('/') + 1);
+                String base2 = getFileBaseName(tname);
+                String cover2 = SD_MMC.exists("/Music/" + base2 + ".jpg") ? "music/" + base2 + ".jpg" : "placeholder.jpg";
+                jsonFile.print("      { \"name\": \"" + base2 + "\", \"cover\": \"" + cover2 + "\", \"file\": \"Music/" + tracks[i] + "\" }");
+                if (i < tracks.size() - 1) jsonFile.println(",");
+
+                logBuf += "  * " + tname + "\n";
+                if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
+            }
+            jsonFile.println();
+            jsonFile.println("    ]");
+        }
+    }
+    jsonFile.println("  },");
+    flushLog();
+
+    // ─── 9) Gallery ───
+    jsonFile.println("  \"gallery\": [");
+    File galleryDir = SD_MMC.open("/Gallery");
+    bool firstGal = true;
+    std::vector<String> mediaExts = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".webp", ".tiff", ".mp4", ".webm", ".mov", ".avi", ".mkv", ".flv"};
+    while (File f = galleryDir.openNextFile()) {
+        yield();
+        String fname = String(f.name());
+        String ext2 = fname.substring(fname.lastIndexOf('.')); ext2.toLowerCase();
+        if (!f.isDirectory() && isValidExtension(fname, mediaExts)) {
+            if (!firstGal) jsonFile.println(",");
+            firstGal = false;
+            String base = getFileBaseName(fname);
+            jsonFile.print("    { \"name\": \"" + base + "\", \"file\": \"Gallery/" + fname + "\" }");
+
+            logBuf += "- " + fname + "\n";
+            if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
+        }
+    }
+    jsonFile.println();
+    jsonFile.println("  ],");
+    flushLog();
+
+    // ─── 10) Files ───
+    jsonFile.println("  \"files\": [");
     File filesDir = SD_MMC.open("/Files");
     bool firstFile = true;
     while (File f = filesDir.openNextFile()) {
-      yield();
-      String fname = f.name();
-      if (!f.isDirectory()) {  
-        if (!firstFile) jsonFile.println(",");
-        firstFile = false;
-        jsonFile.print("    {\"name\":\"" + fname +
-                       "\",\"file\":\"Files/" + fname + "\"}");
-        logBuf += "- " + fname + "\n";
-        if (++logCount % LOG_UPDATE_INTERVAL == 0) {
-          lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-          lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-          lv_timer_handler();
+        yield();
+        String fname = String(f.name());
+        if (!f.isDirectory()) {
+            if (!firstFile) jsonFile.println(",");
+            firstFile = false;
+            jsonFile.print("    { \"name\": \"" + fname + "\", \"file\": \"Files/" + fname + "\" }");
+
+            logBuf += "- " + fname + "\n";
+            if (++logCount % LOG_UPDATE_INTERVAL == 0) flushLog();
         }
-      }
     }
     jsonFile.println();
-  }
-  jsonFile.println("  ]");
+    jsonFile.println("  ]");
+    flushLog();
 
-  // ─── 11) Close JSON, final flush & hide ───
-  jsonFile.println("}");
-  jsonFile.close();
+    // ─── 11) Close JSON and finish ───
+    jsonFile.println("}");
+    jsonFile.close();
 
-  lv_textarea_set_text(ui_MediaGen, logBuf.c_str());
-  lv_textarea_set_cursor_pos(ui_MediaGen, logBuf.length());
-  lv_timer_handler();
-
-  Serial.println("[MediaGen] media.json created successfully.");
-  lv_obj_add_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
+    Serial.println("[MediaGen] media.json created successfully.");
+    lv_obj_add_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
 }
 
 String absURL(const String &path) {
-  return "http://" + WiFi.softAPIP().toString() + path;
+    return "http://" + WiFi.softAPIP().toString() + path;
 }
+
 
 void handleOPDSRoot(AsyncWebServerRequest *request) {
     AsyncResponseStream *res = request->beginResponseStream(
@@ -1287,6 +1182,7 @@ void setup() {
       LCD_Init();
       Lvgl_Init();
       ui_init();       
+      btStop(); //Stops bluetooth (dont need)
       lv_scr_load(ui_Screen1);    
       lv_obj_clear_flag(ui_MediaGen, LV_OBJ_FLAG_HIDDEN);
       lv_textarea_set_text(ui_MediaGen, "USB Mass-Storage Mode");
