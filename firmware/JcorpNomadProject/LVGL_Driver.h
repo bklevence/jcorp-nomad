@@ -2,7 +2,6 @@
 
 #include <lvgl.h>
 #include <lv_conf.h>
-#include <demos/lv_demos.h>
 #include <esp_heap_caps.h>
 #include "Display_ST7789.h"
 
