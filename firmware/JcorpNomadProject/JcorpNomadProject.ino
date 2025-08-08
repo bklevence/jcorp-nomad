@@ -37,6 +37,10 @@ extern void usb_loop();
 #define BOOT_BUTTON_PIN 0  
 int screenBrightness = 100; // 0-100, default full brightness
 void handleConnector(AsyncWebServerRequest *request);
+unsigned long lastTempReading = 0;
+float currentTempC = 0.0;
+static bool sdScanned = false;
+const uint32_t SD_SCAN_DELAY = 5000;  // milliseconds after boot
 // ==================== CONFIGURATION ====================
 
 // Max number of devices that can connect at once
@@ -1168,6 +1172,12 @@ int getConnectedUserCount() {
   // WiFi.softAPgetStationNum() returns uint8_t number of clients
   return WiFi.softAPgetStationNum();
 }
+void sdScanTask(void* pvParameters) {
+  scanSDCardUsage();
+  lv_timer_handler();
+  updateSDBAR();
+  vTaskDelete(NULL);
+}
 // ------------- Main Setup -------------------
 void setup() {
     Serial.begin(115200);
@@ -1264,6 +1274,15 @@ void setup() {
 
 Set_Backlight(settings.brightness);  // now using loaded value
     updateSDBAR();
+    xTaskCreatePinnedToCore(
+      sdScanTask,        // function
+      "SDScan",          // name
+      8 * 1024,          // stack size
+      NULL,              // params
+      1,                 // priority (1 = low)
+      NULL,              // handle (not needed)
+      0                  // run on core 0
+    );
     createSimpleUploadHandler("Movies", "/upload-movie");
     createSimpleUploadHandler("Music", "/upload-music");
     createSimpleUploadHandler("Books", "/upload-book");
@@ -1682,7 +1701,7 @@ Set_Backlight(settings.brightness);  // now using loaded value
           <device>
             <deviceType>urn:schemas-upnp-org:device:MediaServer:1</deviceType>
             <friendlyName>Nomad Media Server</friendlyName>
-            <manufacturer>JCorp</manufacturer>
+            <manufacturer>Jcorp</manufacturer>
             <modelName>Nomad</modelName>
             <UDN>uuid:ESP32-DLNA-FAKE-1234</UDN>
           </device>
@@ -2029,7 +2048,9 @@ server.on("/settings", HTTP_POST, [](AsyncWebServerRequest *request){
     ESP.restart();          // trigger a software restart
   });
 
-
+  server.on("/cpu-temp", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(200, "application/json", String("{\"temp\":") + currentTempC + "}");
+  });
 
   server.on("/enterUsb", HTTP_POST, [](AsyncWebServerRequest *request){
     Serial.println(">>> /enterUsb handler hit");
@@ -2074,13 +2095,11 @@ void loop() {
         lastUpdateTime = millis();
     }
 
-    // Scan SD usage in background every 60 seconds
-    if (millis() - lastSDScanTime > SD_SCAN_INTERVAL) {
-        scanSDCardUsage();  // Safe, non-blocking recursive function
-        lastSDScanTime = millis();
-        
+    if (millis() - lastTempReading > 6000) {
+      currentTempC = temperatureRead();
+      lastTempReading = millis();
     }
-
+  
     delay(5); // Prevent watchdog starvation
     updateClientCount();
 }
