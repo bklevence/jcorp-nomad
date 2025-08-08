@@ -689,6 +689,10 @@
       font-size: 1.1rem;
       cursor: pointer;
     }
+    #cpu-temp {
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
 
   </style>
   <link rel="stylesheet" href="/assets/jqueryfiletree/jQueryFileTree.min.css">
@@ -712,6 +716,9 @@
   <div class="admin-bar">
     <button id="btn-restart">Restart Device</button>
     <button id="btn-usbmode">USB MODE</button>
+    <button id="cpu-temp" class="info-button">Temp: -- °C</button>
+      </div>
+    </div>
     <div class="admin-info">
       <div class="info-block">
         <div class="label">SSID</div>
@@ -819,9 +826,9 @@
             <button id="btn-download" class="neutral">Download</button>
             <button id="btn-edit" class="primary">Edit</button>
           </div>
-          </div>
           <div id="status"></div>
           <div id="progressBar"></div>
+          </div>
         </div>
       </div>
 
@@ -1112,89 +1119,83 @@ async function loadSettings() {
       $('#progressBar').css('width', '0%');
     }
 
-    function reloadTree(action = 'Refreshed') {
+    function reloadTree(action = 'Refreshed', newSelectedPath = null, reopenDir = null) {
+      // 1. Snapshot open folders & selection
+      const prevOpenDirs     = new Set(openDirs);
+      const prevSelectedPath = newSelectedPath || selectedPath;
+
+      // If caller passed reopenDir, stash its parent into prevOpenDirs
+      if (reopenDir) {
+        const parent = reopenDir.replace(/[^\/]+\/?$/, '') || '/';
+        prevOpenDirs.add(parent);
+      }
+
+      // 2. Reset state & remove old tree
+      openDirs.clear();
+      selectedPath = null;
+      updateControls();
+      $('#file-tree').replaceWith('<div id="file-tree"></div>');
+
+      // 3. Rebuild
       initTree();
-    
+
+      // 4. After plugin has attached, reopen and reselect
       setTimeout(() => {
-        openDirs.forEach(path => {
-          const $a = $(`#file-tree a[rel="${path}"]`);
-          if ($a.length && !$a.hasClass('expanded')) {
+        prevOpenDirs.forEach(dir => {
+          const $a = $(`#file-tree a[rel="${dir}"], #file-tree a[rel="${dir.replace(/\/$/, '')}"]`);
+          if ($a.length && $a.hasClass('collapsed')) {
             $a.trigger('click');
           }
         });
-    
-        if (selectedPath) {
-          const $sel = $(`#file-tree a[rel="${selectedPath}"]`);
+
+        if (prevSelectedPath) {
+          const $sel = $(`#file-tree a[rel="${prevSelectedPath}"]`);
           if ($sel.length) {
             $sel.parent().addClass('selected');
+            selectPath(prevSelectedPath, $sel.closest('li').hasClass('directory'));
+          } else {
+            selectedPath = null;
             updateControls();
           }
         }
-    
+
         showStatus(`${action}.`);
-      }, 400);
+      }, 500);
     }
 
 
+
+
     function initTree() {
-
-      $('#file-tree').empty();
-      
-
       $('#file-tree').fileTree({
         root: '/',
         script: '/connector',
         multiFolder: false,
-        folderEvent: 'click'  
+        folderEvent: 'click'
       }, function(path) {
-     
         selectPath(path, false);
       });
-      
- 
-      $('#file-tree').off('click', 'li.directory > a');
-      
 
-      $('#file-tree').on('click', 'li.directory > a', function(e) {
+      // Ensure folder toggling works again
+      $('#file-tree').off('click', 'li.directory > a').on('click', 'li.directory > a', function (e) {
         e.preventDefault();
-        const $link   = $(this);
+        const $link = $(this);
         const relPath = $link.attr('rel');
-        
 
         selectPath(relPath, true);
 
         if ($link.hasClass('expanded')) {
-          $link
-            .removeClass('expanded')
-            .addClass('collapsed')
-            .siblings('ul')
-            .slideUp(150, () => openDirs.delete(relPath));
-          return;
-        }
-
-        if ($link.hasClass('collapsed')) {
-          $link
-            .removeClass('collapsed')
-            .addClass('expanded');
-          // fetch children
-          $('<ul></ul>')
-            .appendTo($link.parent())
-            .hide()
-            .load('/connector', { dir: relPath }, function() {
-              $(this).slideDown(150, () => openDirs.add(relPath));
-            });
-          return;
-        }
-        
-        $link.addClass('expanded');
-        $('<ul></ul>')
-          .appendTo($link.parent())
-          .hide()
-          .load('/connector', { dir: relPath }, function() {
+          $link.removeClass('expanded').addClass('collapsed')
+            .siblings('ul').slideUp(150, () => openDirs.delete(relPath));
+        } else if ($link.hasClass('collapsed')) {
+          $link.removeClass('collapsed').addClass('expanded');
+          $('<ul></ul>').appendTo($link.parent()).hide().load('/connector', { dir: relPath }, function () {
             $(this).slideDown(150, () => openDirs.add(relPath));
           });
+        }
       });
     }
+
 
 
     function selectPath(path, isDir) {
@@ -1233,12 +1234,17 @@ async function loadSettings() {
       const name = prompt('Folder name:');
       if (!name) return;
       const fd = new FormData();
-      fd.append('dirname', (isDirectory ? selectedPath : '/') + name + '/');
+      // build the parent folder path
+      const parentDir = isDirectory ? selectedPath : '/';
+      fd.append('dirname', parentDir + name + '/');
       fetch('/mkdir', { method: 'POST', body: fd })
         .then(r => {
-            if (r.ok) {
-              reloadTree('Folder created');
-            } else return Promise.reject();
+          if (r.ok) {
+            // reopen the folder where we created the new directory
+            reloadTree('Folder created', null, parentDir);
+          } else {
+            return Promise.reject();
+          }
         })
         .catch(() => showStatus('Create folder failed', 'red'));
     });
@@ -1248,79 +1254,116 @@ async function loadSettings() {
     $('#upload-input').change(function () {
       const file = this.files[0];
       if (!file) return;
+
+      // Determine upload directory
       const uploadPath = isDirectory ? selectedPath : '/';
+
       const fd = new FormData();
       fd.append('dir', uploadPath);
       fd.append('file', file);
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/upload', true);
-        $('#progressBar')
-          .stop(true)
-          .show()
-          .css({ width: '0%' });
-        
-        // update during upload
-        xhr.upload.onprogress = e => {
-          if (e.lengthComputable) {
-            const pct = Math.round((e.loaded / e.total) * 100);
-            $('#progressBar').css('width', pct + '%');
-          }
-        };
-        
-        // always hide & reset after completion
-        xhr.onloadend = () => {
-          setTimeout(() => {
-            $('#progressBar')
-              .fadeOut(200, function () { $(this).css('width', '0%'); });
-          }, 300);
-        };
-        
-        xhr.onload = () => {
-            if (xhr.status === 200) {
-              reloadTree(`Uploaded "${file.name}"`);
-            } else showStatus('Upload failed', 'red');
-        };
-        xhr.onerror = () => {
-          showStatus('Upload error', 'red');
-        };
+
+      $('#progressBar')
+        .stop(true)
+        .show()
+        .css({ width: '0%' });
+
+      // update during upload
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          $('#progressBar').css('width', pct + '%');
+        }
+      };
+
+      // always hide & reset after completion
+      xhr.onloadend = () => {
+        setTimeout(() => {
+          $('#progressBar')
+            .fadeOut(200, function () { $(this).css('width', '0%'); });
+        }, 300);
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          // Full path of the new file
+          const newPath = uploadPath
+            + (uploadPath.endsWith('/') ? '' : '/')
+            + file.name;
+
+          // 1) highlight the newly uploaded file
+          // 2) reopen its parent folder (uploadPath)
+          reloadTree(
+            `Uploaded "${file.name}"`,
+            newPath,
+            uploadPath
+          );
+        } else {
+          showStatus('Upload failed', 'red');
+        }
+      };
+
+      xhr.onerror = () => {
+        showStatus('Upload error', 'red');
+      };
 
       showStatus('Uploading…');
       xhr.send(fd);
       this.value = '';
     });
 
+
     // Rename
     $('#btn-rename').click(() => {
       const base = selectedPath.replace(/\/$/, '').split('/').pop();
       const name = prompt('Rename to:', base);
       if (!name || name === base) return;
-      const newPath = selectedPath.replace(/[^\/]+\/?$/, name + (isDirectory ? '/' : ''));
+
+      // compute old parent and new full path
+      const oldPath = selectedPath;
+      const parentDir = oldPath.replace(/[^\/]+\/?$/, '');
+      const newPath = oldPath.replace(/[^\/]+\/?$/, name + (isDirectory ? '/' : ''));
+
       const fd = new FormData();
-      fd.append('oldname', selectedPath);
+      fd.append('oldname', oldPath);
       fd.append('newname', newPath);
       fetch('/rename', { method: 'POST', body: fd })
         .then(r => {
-            if (r.ok) {
-              reloadTree('Renamed');
-            } else return Promise.reject();
+          if (r.ok) {
+            // reopen the parent dir so the renamed item shows up
+            reloadTree('Renamed', newPath, parentDir);
+          } else {
+            return Promise.reject();
+          }
         })
         .catch(() => showStatus('Rename failed', 'red'));
     });
 
+
     // Delete
     $('#btn-delete').click(() => {
       if (!confirm(`Delete ${selectedPath}?`)) return;
+
+      // remember which folder we’re deleting from
+      const oldPath = selectedPath;
+      const parentDir = oldPath.replace(/[^\/]+\/?$/, '');
+
       const fd = new FormData();
-      fd.append('filename', selectedPath);
+      fd.append('filename', oldPath);
       fetch('/delete', { method: 'POST', body: fd })
         .then(r => {
-            if (r.ok) {
-              reloadTree('Deleted');
-            } else return Promise.reject();
+          if (r.ok) {
+            // reopen the parent folder after deletion
+            reloadTree('Deleted', null, parentDir);
+          } else {
+            return Promise.reject();
+          }
         })
         .catch(() => showStatus('Delete failed', 'red'));
     });
+
 
     // Download
     $('#btn-download').click(() => {
@@ -1453,29 +1496,31 @@ function updateBrightnessLabel(val) {
 }
 document.addEventListener('DOMContentLoaded', () => {
   loadSettings();
-  // Attach RGB button clicks
-  document.getElementById('mode-off').onclick    = () => setRGBMode('off');
-  document.getElementById('mode-solid').onclick  = () => setRGBMode('solid');
-  document.getElementById('mode-rainbow').onclick= () => setRGBMode('rainbow');
 
-  // Attach color‑picker change
-  document.getElementById('led-color').onchange = e => setSolidColor(e.target.value);
-  const brightnessSlider = document.getElementById('brightness');
-  updateBrightnessLabel(brightnessSlider.value);
+    // Attach RGB button clicks
+    document.getElementById('mode-off').onclick    = () => setRGBMode('off');
+    document.getElementById('mode-solid').onclick  = () => setRGBMode('solid');
+    document.getElementById('mode-rainbow').onclick= () => setRGBMode('rainbow');
 
-  async function fetchAdminBar() {
-    try {
-      const res = await fetch('/admin-status');
-      const data = await res.json();
+    // Attach color‑picker change
+    document.getElementById('led-color').onchange = e => setSolidColor(e.target.value);
+    const brightnessSlider = document.getElementById('brightness');
+    updateBrightnessLabel(brightnessSlider.value);
 
-      document.getElementById('bar-ssid').textContent      = data.ssid      || '—';
-      document.getElementById('bar-wifi-pass').textContent = data.wifiPassword || '—';
-      document.getElementById('bar-users').textContent = 
-        typeof data.users === 'number' ? `${data.users} connected` : 'none';
-    } catch (e) {
-      console.error('Could not load admin bar:', e);
+    async function fetchAdminBar() {
+      try {
+        const res = await fetch('/admin-status');
+        const data = await res.json();
+
+        document.getElementById('bar-ssid').textContent      = data.ssid      || '—';
+        document.getElementById('bar-wifi-pass').textContent = data.wifiPassword || '—';
+        document.getElementById('bar-users').textContent =
+          typeof data.users === 'number' ? `${data.users} connected` : 'none';
+
+      } catch (e) {
+        console.error('Could not load admin bar:', e);
+      }
     }
-  }
 
   // Hook restart button
   document.getElementById('btn-restart').addEventListener('click', async () => {
@@ -1508,8 +1553,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch bar info on load & every 30s
   fetchAdminBar();
   setInterval(fetchAdminBar, 30000);
+  updateCPUtemp();
 });
-
+document.getElementById('cpu-temp').addEventListener('click', () => {
+  showFahrenheit = !showFahrenheit;
+  updateTemp();
+});
 const toggleBtn = document.getElementById("auto-generate-toggle");
 let isAutoGenerate = false;  
 
@@ -1563,10 +1612,44 @@ toggleBtn.addEventListener("click", () => {
     }
   });
 
-  // Focus the input on page load
-  window.addEventListener('DOMContentLoaded', () => {
-    pwInput.focus();
-  });
+// Focus the input on page load
+window.addEventListener('DOMContentLoaded', () => {
+  pwInput.focus();
+  updateTemp();  // call immediately when page loads to show initial temp/color
+});
+
+let showFahrenheit = false;
+
+async function updateTemp() {
+  try {
+    const res = await fetch('/cpu-temp');
+    const { temp } = await res.json();
+
+    const tempBtn = document.getElementById('cpu-temp');
+
+    let displayTemp = temp;
+    let unit = "°C";
+
+    if (showFahrenheit) {
+      displayTemp = (temp * 9/5) + 32;
+      unit = "°F";
+    }
+
+    tempBtn.textContent = `Temp: ${displayTemp.toFixed(1)} ${unit}`;
+
+    if (temp < 60) tempBtn.style.backgroundColor = '#28a745'; // Green
+    else if (temp < 70) tempBtn.style.backgroundColor = '#ffc107'; // Yellow
+    else if (temp < 75) tempBtn.style.backgroundColor = '#fd7e14'; // Orange
+    else tempBtn.style.backgroundColor = '#dc3545'; // Red
+
+  } catch (e) {
+    console.warn('Failed to fetch temp:', e);
+  }
+}
+
+// Refresh every 6 seconds
+setInterval(updateTemp, 6000);
+
 
 </script>
 </body>
