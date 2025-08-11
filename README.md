@@ -2,7 +2,7 @@
 
 
 <div align="center">
-  <img src="Screenshot 2025-07-07 193521.png" alt="Jcorp Nomad Offline Media Server" width="800">
+  <img src="Screenshot 2025-08-10 220031.png" alt="Jcorp Nomad Offline Media Server" width="800">
 </div>
 
 <p align="center"><b>A portable, offline media server powered by the ESP32-S3 in a thumbdrive form factor.</b><br>
