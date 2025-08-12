@@ -1,6 +1,5 @@
 # <div align="center">Jcorp Nomad</div>
 
-
 <div align="center">
   <img src="Screenshot 2025-08-10 220031.png" alt="Jcorp Nomad Offline Media Server" width="800">
 </div>
@@ -14,10 +13,63 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
   <img src="https://img.shields.io/badge/status-beta-lightgrey" alt="Status: Beta" />
 </p>
 
+---
+
+## Major Update: Experimental Features Merged Into Main
+
+The **latest update** moves the majority of polished experimental branch features into the `main` branch!  
+This means a more stable, refined experience for everyone with all the new goodies tested and ready.
 
 ---
 
-##  Polish Update Disclaimer
+## Known Issues (Being Worked On)
+
+- Large directories (80+ GB) can cause the admin file browser to crash when opened.  
+- Some bugs remain with SD Card storage reading on both the Screen UI and the admin panel.
+
+These issues are actively being addressed and will be fixed in upcoming releases.
+
+---
+
+## Future Plans
+
+Here’s what’s coming next for Nomad:
+
+- **Custom JS Content Players:**  
+  Rebuild the video, audio, and ebook players with custom JavaScript libraries to enable:  
+  - Better video support including multiple audio tracks and subtitles  
+  - Proper EPUB support with in-browser reading  
+  - CBX/CBZ comic book support with better navigation  
+
+- **Custom Emojis and Icons:**  
+  Devices currently recolor default emojis used in the UI inconsistently. Custom emojis/icons will provide consistent branding and better UX.
+
+- **Advanced Caching System:**  
+  A complex browser-side caching mechanism to:  
+  - Track progress of media playback (movies, shows)  
+  - Offer "resume where you left off" options for the last 5 watched items
+
+---
+
+## New Store and Promo Videos
+
+You can now **buy your own Nomad Dev Kit** and get started immediately!  
+The product is open source, but this saves you time and effort on assembly.
+
+**Promo Video:**  
+[https://www.youtube.com/shorts/k8XJGTmbzzc](https://www.youtube.com/shorts/k8XJGTmbzzc)
+
+**Demo Video**  
+[https://www.youtube.com/watch?v=zEjgI8bhxzk&t=2s](https://www.youtube.com/watch?v=zEjgI8bhxzk&t=2s)
+
+**Official Website:**  
+[https://nomad.jcorptech.net](https://nomad.jcorptech.net)
+
+---
+
+<!-- Existing README content continues below -->
+
+## Polish Update Disclaimer
 
 This is a major update focused on **polish, stability, and usability improvements**.  
 It includes:
@@ -33,95 +85,65 @@ It includes:
 
 ## New Features in the Polish Update
 
-###  Music Page
+### Music Page
 
-- Song downloads
-- Loop songs 
-- Sort songs A–Z
-- Shuffle songs and playlists
-- Playlist support via subfolders (flexible usage)
-- Playlists loop automatically
+- Song downloads  
+- Loop songs  
+- Sort songs A–Z  
+- Shuffle songs and playlists  
+- Playlist support via subfolders (flexible usage)  
+- Playlists loop automatically  
 - Expanded file type support: tested with `.mp3`, `.wav`, and `.flac` (others may work, untested)
 
-###  Books Page
+### Books Page
 
-- EPUB support added (no web reader yet, but download works)
+- EPUB support added (no web reader yet, but download works)  
 - Fixed footer CSS display issue
 
-###  Admin Panel (Completely Rebuilt)
+### Admin Panel (Completely Rebuilt)
 
-- Restart the device directly from the panel
-- Switch to USB Mass Storage Mode with one click
-- SD card usage tracking with visual indicators
-- Control RGB LED color and mode
-- Change or disable the admin password (for admin page access) (default is "password")
-- Change Wi-Fi SSID and password
-- Set device brightness (off option coming soon)
-- Toggle `media.json` auto-generation on boot
-- Generate `media.json` manually
-- Display connected Wi-Fi info and number of connected users
-- Integrated file system browser with jQueryFileTree:
-  - Upload, delete, rename, download, create folder, and edit files (basic inline code editor)
-  - Improved UX over the original browser, but still allows dangerous deletions, use with care.
+- Restart the device directly from the panel  
+- Switch to USB Mass Storage Mode with one click  
+- SD card usage tracking with visual indicators  
+- Control RGB LED color and mode  
+- Change or disable the admin password (default is "password")  
+- Change Wi-Fi SSID and password  
+- Set device brightness (off option coming soon)  
+- Toggle `media.json` auto-generation on boot  
+- Generate `media.json` manually  
+- Display connected Wi-Fi info and number of connected users  
+- Integrated file system browser with jQueryFileTree (upload, delete, rename, download, create folder, inline editing)
 
-###  Gallery Page (New)
+### Gallery Page (New)
 
-- Displays images with basic zoom functionality
-- Video playback support
+- Displays images with basic zoom functionality  
+- Video playback support  
 - Sortable display grid
 
-###  Files Page (New)
+### Files Page (New)
 
-- Lets you store and download any file type
-- Still limited to FAT32 file size limit (4 GB max)
-- Useful for sharing non-media files like firmware, PDFs, etc.
+- Store and download any file type  
+- Limited to FAT32 max file size (4 GB)  
+- Useful for firmware, PDFs, and other non-media files
 
-###  Interface + UI Improvements
+### Interface + UI Improvements
 
-- LCD now displays “USB Mass Storage Mode” clearly — no more frozen screen confusion
-- `media.json` generation displays file names in real-time on screen
+- LCD clearly shows USB Mass Storage Mode  
+- Real-time file progress shown on screen during `media.json` generation  
 - More intuitive screen feedback during long operations
 
-###  File Type & Playback Support
+### File Type & Playback Support
 
-- Improved video file detection and browser compatibility
-- Works with almost all browser-supported video types
+- Improved video file detection and browser compatibility  
+- Works with most browser-supported video types  
 - Unsupported files fall back to download behavior
 
-###  Admin Access Notes
+### Admin Access Notes
 
-- A new "Settings" button on the top-right of the menu screen leads to the Admin Panel
-- Default admin password is `"password"`
-- If locked out, inspect (F12) the overlay and delete it manually to regain access
-- All settings now persist across reboots
-
----
-
-## Experimental Branch Enhancements
-
-This branch includes all current features being tested for stability before merging into `main`.
-
-### Key Features
-
-- Admin panel with controls for restart, USB mode, Wi-Fi, RGB, brightness, password, and media generation
-- Frontend-based configuration (no firmware edits required)
-- Full file system browser with upload, rename, delete, and inline editing
-- Music player with playlist support, shuffle, loop, downloads, and file sorting
-- Expanded audio format support (MP3, WAV, FLAC, and others)
-- Books section with PDF support (and limited Epub support)
-- Gallery page for browsing images and video playback
-- Files page for general-purpose file sharing and downloads
-- Media.json generation with live progress shown on screen
-- LCD interface with USB mode status and SD card usage display
-- Captive portal for easy user access
-- OPDS support for eBook integration
-- Basic DLNA support for media discovery on supported devices
-- Custom UI built with SquareLine Studio
-- Persistent settings stored across reboots
-- Improved mobile-friendly web UI
-
-Use this branch if you want the most up to date features, improved stability, and a much more polished experience. While still under active development, this is now the recommended version for most users and I will be pushing it to main after a few days of user testing. 
-
+- New "Settings" button leads to Admin Panel  
+- Admin Password disabled by default
+- If locked out, inspect (F12) the overlay and delete it manually  
+- Settings persist across reboots
 
 ---
 
