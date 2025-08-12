@@ -190,6 +190,9 @@ The following links are Amazon affiliate links. Purchasing through these links s
 - **FAT32-formatted microSD card (16 GB minimum recommended, 64 GB preferred)**  
   [https://amzn.to/44tM1c4](https://amzn.to/44tM1c4)
 
+- **SD-Card Extender** Not needed, but useful for the latest case version, lets you get to the SD card without disasembly. 
+  [https://amzn.to/45IWIJz](https://amzn.to/45IWIJz)
+
 - **USB power source** (e.g., battery bank or computer)
 
 - **Optional:** 3D-printed enclosure (STL files included in the repository)
