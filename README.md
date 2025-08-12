@@ -22,6 +22,42 @@ This means a more stable, refined experience for everyone with all the new goodi
 
 ---
 
+## File Compatibility & Streaming
+
+A compatibility guide for supported media types, streaming expectations, and additional notes on performance.
+
+| Category      | Supported Formats                    | Notes                                                                                   |
+|---------------|------------------------------------|-----------------------------------------------------------------------------------------|
+| **Video**     | `.mp4`, `.mov`, `.mkv`, `.webm`   | Reliable playback for these formats. `.avi` and `.flv` are **not supported**.           |
+| **Audio**     | `.mp3`, `.flac`, `.wav`             | Other audio formats are **not supported** by the built-in player.                       |
+| **Books / Docs** | `.pdf` (recommended), `.epub` (download only) | `.pdf` files can be opened and read directly in the browser. `.epub` files are downloadable but cannot be viewed in the built-in reader. |
+
+**Important:** Nomad uses FAT32 storage by default, which limits individual file sizes to under 4 GB.
+
+---
+
+### Streaming Performance (Typical)
+
+The following stream counts are based on a high endurance Grade 10 microSD card under ideal conditions:
+
+| Resolution            | Typical Concurrent Streams |
+|-----------------------|----------------------------|
+| 480p                  | 6–8 streams                |
+| 720p                  | 3–5 streams                |
+| 1080p                 | 2–3 streams                |
+| Ultra-HD / High bitrate| ~1 stream                  |
+
+**Disclaimer:** Actual streaming performance varies depending on:  
+- File encoding and bitrate  
+- Network conditions  
+- Client device capabilities  
+- Number of simultaneous users  
+
+Encoding video files using **H.264** video codec and **AAC** audio codec tends to improve streaming performance and allow more concurrent streams.
+
+---
+
+
 ## Known Issues (Being Worked On)
 
 - Large directories (80+ GB) can cause the admin file browser to crash when opened.  
