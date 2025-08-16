@@ -20,6 +20,16 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 The **latest update** moves the majority of polished experimental branch features into the `main` branch!  
 This means a more stable, refined experience for everyone with all the new goodies tested and ready.
 
+This version also fixed the library errors. You must install the follwwing libraraies in the manager.
+  
+  "ArduinoJson" by Benoit Blanchon v7.3.0
+  
+  "Async TCP" by ESP32Async v3.4.7
+  
+  "ESP Async Webserver" by ESP32Async v3.7.1
+  
+  "LVGL" by kisvegabor v8.4.0
+
 ---
 
 ## File Compatibility & Streaming
