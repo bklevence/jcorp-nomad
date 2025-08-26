@@ -15,7 +15,10 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 
 ---
 
-# 
+# Quick Notes
+
+I had to change a pin in the [firmware/JcorpNomadProject/Display_ST7789.h](firmware/JcorpNomadProject/Display_ST7789.h) to get the screen working. Also, you need to have 
+a proper cable and powersupply to get the screen operational. It may not work when powered from the USB on your computer. Personally I may find another 
 
 
 ## WIP Status
@@ -46,24 +49,26 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 
 ## Quick Start
 
-1. Flash the ESP32-S3 with the firmware in the `/firmware/` directory.
-2. Format your SD card as **FAT32** and copy the web files from `/SD_Card_Template/`.
-3. Place your media files into the appropriate folders (see structure below).
-4. Run `media.py` to generate `media.json` automatically.
-5. Insert the SD card and power the device.
-6. Connect to the Wi-Fi network named `NomadServer`.
-7. Your browser will be redirected to the offline media interface.
+1. Flash the ESP32-S3 with the firmware in the `/firmware/` and utilize `/libraries/` directories using Arduino IDE.
+....* Placeholder for proper Arduino settings for this board variant. 
+2. Format your SD card as **FAT32**, Allocation size: 32K, name it whatever, and copy the files from `/SD_Card_Template/`.
+3. Place your media files into the appropriate folders, [see structure below](#WIP-Status).
+4. Insert the SD card and power the device.
+5. Connect to the Wi-Fi network named `NomadServer`.
+6. Your browser will be redirected to the offline media interface.
+....* you may need to generate the media.json once you're in.
 
-## Troubleshooting
+## Repo Structure
 
-Common issues and their solutions are detailed in the Troubleshooting section on instructibles.
+> [!NOTE]
+> 0I need to clean this up a little, but linking things for now. 
 
-Topics covered include:
+- [/firmware](/firmware) – Literally just Arduino (see .ino file) firmware for ESP32-S3, I will probably spin this into the ardiuno folder as a sketch at some point, for now it's nice to have so I can see deltas between repos.
+    - [/firmware/JcorpNomadProject/JcorpNomadProject.ino](/firmware/JcorpNomadProject/JcorpNomadProject.ino) - Wi-Fi name and password can be changed here
+- [/SD_Card_Template](/SD_Card_Template/) – Web UI, HTML files, and [/SD_Card_Template/media.json](/SD_Card_Template/media.json). 
+    - [/SD_Card_Template/menu.html](/SD_Card_Template/menu.html) - Branding (logo, favicon) can be replaced in here. Sections (Movies, Music, etc.) can be removed from here.
+- [/Arduino/libraries/](/Arduino/libraries/) – arduino libraries I needed to get this off the ground. This was a zip as a release on main branch. 
 
-- SD card read errors
-- Captive portal issues on some phones
-- Video playback and seeking bugs
-- UI glitches or screen failure
 
 ## File Compatibility & Streaming
 
@@ -76,30 +81,24 @@ A compatibility guide for supported media types, streaming expectations, and add
 | **Books / Docs** | `.pdf` (recommended), `.epub` (download only) | `.pdf` files can be opened and read directly in the browser. `.epub` files are downloadable but cannot be viewed in the built-in reader. |
 | **Images**     | `.jpg`             | Used for covers and folder images only, and ensure all images and media files use matching names for proper display.                       |
 
-**Important:** Nomad uses FAT32 storage by default, which limits individual file sizes to under 4 GB.
 
-## What's Included
+> [!IMPORTANT]
+> By utilizing FAT32 storage we limit individual file sizes to under 4 GB.
 
-- [/firmware](/firmware) – Literally just Arduino firmware for ESP32-S3, I will probably spin this into the ardiuno folder as a sketch at some point, for now it's nice to have so I can see deltas between repos.
-    - [/firmware/JcorpNomadProject/JcorpNomadProject.ino](/firmware/JcorpNomadProject/JcorpNomadProject.ino) - Wi-Fi name and password can be changed here
-- [/SD_Card_Template](/SD_Card_Template/) – Web UI, HTML files, and [/SD_Card_Template/media.json](/SD_Card_Template/media.json). 
-    - [/SD_Card_Template/menu.html](/SD_Card_Template/menu.html) - Branding (logo, favicon) can be replaced in here. Sections (Movies, Music, etc.) can be removed from here.
-- [/Arduino/libraries/](/Arduino/libraries/) – arduino libraries I needed to get this off the ground. This was a zip as a release on main branch. 
-
-## Folder Structure (on SD Card)
+## Example Folder Structure (on SD Card)
 
 ```
 /Movies/
-    Interstellar.mp4
-    Interstellar.jpg
+    Movie.mp4
+    Movie.jpg
 /Shows/
-    The Office/
-        S01E01 - Pilot.mp4
-        S01E02 - Diversity Day.mp4
-    The Office.jpg
+    Show Name/
+        S01E01 - Episode 1 Title.mp4
+        S01E02 - Episode 2 Title.mp4
+    Show Name.jpg
 /Books/
-    The Martian.pdf
-    The Martian.jpg
+    Book Title.pdf
+    Book Title.jpg
 /Music/
     track01.mp3
 
@@ -110,7 +109,6 @@ movies.html
 shows.html
 books.html
 music.html
-media.py
 media.json
 placeholder.jpg
 Logo.png
