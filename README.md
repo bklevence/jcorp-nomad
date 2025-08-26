@@ -50,13 +50,13 @@ a proper cable and powersupply to get the screen operational. It may not work wh
 ## Quick Start
 
 1. Flash the ESP32-S3 with the firmware in the `/firmware/` and utilize `/libraries/` directories using Arduino IDE.
-....* Placeholder for proper Arduino settings for this board variant. 
+  - Placeholder for proper Arduino settings for this board variant. 
 2. Format your SD card as **FAT32**, Allocation size: 32K, name it whatever, and copy the files from `/SD_Card_Template/`.
 3. Place your media files into the appropriate folders, [see structure below](#WIP-Status).
 4. Insert the SD card and power the device.
 5. Connect to the Wi-Fi network named `NomadServer`.
 6. Your browser will be redirected to the offline media interface.
-....* you may need to generate the media.json once you're in.
+  - you may need to generate the media.json once you're in.
 
 ## Repo Structure
 
