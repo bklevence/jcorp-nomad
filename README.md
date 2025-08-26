@@ -31,7 +31,8 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 - [ ] Possibly attempt to update libraries (if feasible)
 
 
-
+> [!IMPORTANT]
+> The following is from the original repo, I will be coming back to edit at some point.
 
 
 ## Major Update: Experimental Features Merged Into Main
