@@ -11,7 +11,7 @@
 #define EXAMPLE_PIN_NUM_LCD_CS         42
 #define EXAMPLE_PIN_NUM_LCD_DC         41
 #define EXAMPLE_PIN_NUM_LCD_RST        39
-#define EXAMPLE_PIN_NUM_BK_LIGHT       48
+#define EXAMPLE_PIN_NUM_BK_LIGHT       46
 #define Frequency       1000                    // PWM frequencyconst 
 #define Resolution      10                      
 

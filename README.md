@@ -1,7 +1,7 @@
 # <div align="center">Jcorp Nomad</div>
 
 <div align="center">
-  <img src="Screenshot 2025-08-10 220031.png" alt="Jcorp Nomad Offline Media Server" width="800">
+  <img src="ESP32-S3-LCD-1.47B-details-interUSBC.jpg" alt="Jcorp Nomad Offline Media Server" width="800">
 </div>
 
 <p align="center"><b>A portable, offline media server powered by the ESP32-S3 in a thumbdrive form factor.</b><br>
@@ -14,6 +14,8 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 </p>
 
 ---
+
+# [https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B)
 
 ## Major Update: Experimental Features Merged Into Main
 
@@ -249,17 +251,12 @@ And it’s open-source, so anyone can expand, improve, and adapt it for their ow
 
 ## Hardware Requirements
 
-**Disclaimer:**  
-The following links are Amazon affiliate links. Purchasing through these links supports this project at no additional cost to you. Thank you for your support!
 
-- **Waveshare ESP32-S3 Dev Board (1.47" LCD version)**  
-  [https://amzn.to/4ktB6oT](https://amzn.to/4ktB6oT)
+- **Waveshare ESP32-S3 Dev Board (1.47" LCD version) with USBC for this fork**  
 
 - **FAT32-formatted microSD card (16 GB minimum recommended, 64 GB preferred)**  
-  [https://amzn.to/44tM1c4](https://amzn.to/44tM1c4)
 
 - **SD-Card Extender** Not needed, but useful for the latest case version, lets you get to the SD card without disasembly. 
-  [https://amzn.to/45IWIJz](https://amzn.to/45IWIJz)
 
 - **USB power source** (e.g., battery bank or computer)
 

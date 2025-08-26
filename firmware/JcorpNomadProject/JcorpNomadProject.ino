@@ -52,7 +52,7 @@ struct AdminSettings {
   String adminPassword = "";
   String wifiSSID = "Jcorp_Nomad";
   String wifiPassword = "password";
-  int brightness = 230;
+  int brightness = 100;
   bool autoGenerateMedia = false;
 };
 
@@ -114,7 +114,7 @@ bool loadSettings() {
   settings.adminPassword = doc["adminPassword"] | "";
   settings.wifiSSID = doc["wifiSSID"] | "Jcorp_Nomad";
   settings.wifiPassword = doc["wifiPassword"] | "password";
-  settings.brightness = doc["brightness"] | 230;
+  settings.brightness = doc["brightness"] | 100;
   settings.autoGenerateMedia = doc["autoGenerateMedia"] | false;
 
   return true;
