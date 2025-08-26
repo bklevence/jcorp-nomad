@@ -23,12 +23,12 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 - [x] Get working on Waveshare ESP32-S3-LCD-1.47B (USB C)
     - [x] [https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B)
 - [ ] Learn how to change screen UI
-- [ ] Update Trim down this bloated readme from original
+- [ ] Update Trim down this bloated readme from original, it's quite messy.
     - [ ] Add clearer instructions for when I decide to do this again.
         - [ ] Troubleshooting should just be here, no need for [instructables](https://www.instructables.com/Jcorp-Nomad-Mini-WIFI-Media-Server/) .
         - [ ] quickstart lacking information (fat32 specs)
-    - [ ] remove updates/promos and condense to necessary information.   
-    - [ ] Add arduino libraries as directory rather than zip file in release...
+    - [x] remove updates/promos and condense to necessary information.   
+    - [x] Add arduino libraries as directory rather than zip file in release...
 - [ ] Possibly attempt to update libraries (if feasible) 
     - [ ] Double check on following since experimental merge:
          - [ ] "ArduinoJson" by Benoit Blanchon v7.3.0
@@ -80,11 +80,11 @@ A compatibility guide for supported media types, streaming expectations, and add
 
 ## What's Included
 
-- [/firmware](/firmware/) – Arduino firmware for ESP32-S3, I will probably spin this into the ardiuno folder as a sketch at some point, for now it's nice to have so I can see deltas between repos.
-    - `firmware/Nomad.ino` - Wi-Fi name and password can be changed here
-- `/SD_Card_Template/` – Web UI, HTML files, and [media.py](media.py). 
-    - `menu.html`- Branding (logo, favicon) can be replaced in here. Sections (Movies, Music, etc.) can be removed from here.
-- `/Arduino/libraries/` – arduino libraries I needed to get this off the ground. This was a zip as a release on main branch. 
+- [/firmware](/firmware) – Literally just Arduino firmware for ESP32-S3, I will probably spin this into the ardiuno folder as a sketch at some point, for now it's nice to have so I can see deltas between repos.
+    - [/firmware/JcorpNomadProject/JcorpNomadProject.ino](/firmware/JcorpNomadProject/JcorpNomadProject.ino) - Wi-Fi name and password can be changed here
+- [/SD_Card_Template](/SD_Card_Template/) – Web UI, HTML files, and [/SD_Card_Template/media.json](/SD_Card_Template/media.json). 
+    - [/SD_Card_Template/menu.html](/SD_Card_Template/menu.html) - Branding (logo, favicon) can be replaced in here. Sections (Movies, Music, etc.) can be removed from here.
+- [/Arduino/libraries/](/Arduino/libraries/) – arduino libraries I needed to get this off the ground. This was a zip as a release on main branch. 
 
 ## Folder Structure (on SD Card)
 
