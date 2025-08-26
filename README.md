@@ -71,7 +71,7 @@ A compatibility guide for supported media types, streaming expectations, and add
 
 | Category      | Supported Formats                    | Notes                                                                                   |
 |---------------|------------------------------------|-----------------------------------------------------------------------------------------|
-| **Video**     | `.mp4`, `.mov`, `.mkv`, `.webm`   | Reliable playback for these formats. `.avi` and `.flv` are **not supported**. Encoding video files using **H.264** video codec and **AAC** audio codec tends to improve streaming performance and allow more concurrent streams.  1080P = 2-3 streams.        |
+| **Video**     | `.mp4`, `.mov`, `.mkv`, `.webm`   | Reliable playback for these formats. `.avi` and `.flv` are **not supported**. Encoding video files using **H.264** video codec and **AAC** audio codec tends to improve streaming performance and allow more concurrent streams.  1080P = 2-3 streams, lower quality = more streams.        |
 | **Audio**     | `.mp3`, `.flac`, `.wav`             | Other audio formats are **not supported** by the built-in player.                       |
 | **Books / Docs** | `.pdf` (recommended), `.epub` (download only) | `.pdf` files can be opened and read directly in the browser. `.epub` files are downloadable but cannot be viewed in the built-in reader. |
 | **Images**     | `.jpg`             | Used for covers and folder images only, and ensure all images and media files use matching names for proper display.                       |
@@ -80,9 +80,10 @@ A compatibility guide for supported media types, streaming expectations, and add
 
 ## What's Included
 
-- `/firmware/` – Arduino firmware for ESP32-S3, I will probably spin this into the ardiuno folder as a sketch at some point, for now it's nice to have so I can see deltas between repos.
-    - Wi-Fi name and password can be changed in `firmware/Nomad.ino`
-- `/SD_Card_Template/` – Web UI, HTML files, and `media.py`. Branding (logo, favicon) can be replaced in here. Sections (Movies, Music, etc.) can be removed from `menu.html`. 
+- [/firmware](/firmware/) – Arduino firmware for ESP32-S3, I will probably spin this into the ardiuno folder as a sketch at some point, for now it's nice to have so I can see deltas between repos.
+    - `firmware/Nomad.ino` - Wi-Fi name and password can be changed here
+- `/SD_Card_Template/` – Web UI, HTML files, and [media.py](media.py). 
+    - `menu.html`- Branding (logo, favicon) can be replaced in here. Sections (Movies, Music, etc.) can be removed from here.
 - `/Arduino/libraries/` – arduino libraries I needed to get this off the ground. This was a zip as a release on main branch. 
 
 ## Folder Structure (on SD Card)
@@ -115,6 +116,5 @@ placeholder.jpg
 Logo.png
 favicon.ico
 ```
----
 
  
