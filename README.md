@@ -1,11 +1,11 @@
-# <div align="center">Jcorp Nomad</div>
+# <div align="center">Jcorp Nomad USB C Variant</div>
 
 <div align="center">
   <img src="ESP32-S3-LCD-1.47B-details-interUSBC.jpg" alt="Jcorp Nomad Offline Media Server" width="800">
 </div>
 
 <p align="center"><b>A portable, offline media server powered by the ESP32-S3 in a thumbdrive form factor.</b><br>
-Stream movies, music, books, and shows anywhere — no internet required.</p>
+Stream movies, music, books, and shows anywhere — no internet required. [https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B)</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-CC--BY--NC--SA%204.0-blue.svg" alt="License: CC BY-NC-SA 4.0" />
@@ -15,7 +15,23 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 
 ---
 
-# [https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B)
+# 
+
+
+## WIP Status
+
+- [x] Get working on Waveshare ESP32-S3-LCD-1.47B (USB C)
+- [ ] Learn how to change screen UI
+- [ ] Update Trim down this bloated readme from original
+    - [ ] Add clearer instructions for when I decide to do this again.
+        - [ ] quickstart lacking information (fat32 specs)
+    - [ ] remove updates/promos and condense to necessary information.   
+    - [ ] Add arduino libraries as directory rather than zip file in release...
+- [ ] Possibly attempt to update libraries (if feasible)
+
+
+
+
 
 ## Major Update: Experimental Features Merged Into Main
 
