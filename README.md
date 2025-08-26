@@ -21,7 +21,7 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 ## WIP Status
 
 - [x] Get working on Waveshare ESP32-S3-LCD-1.47B (USB C)
-    - [ ] [https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B)
+    - [x] [https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B)
 - [ ] Learn how to change screen UI
 - [ ] Update Trim down this bloated readme from original
     - [ ] Add clearer instructions for when I decide to do this again.
