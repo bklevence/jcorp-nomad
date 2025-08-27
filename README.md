@@ -134,3 +134,4 @@ favicon.ico
 - [ ] Some bugs remain with SD Card storage reading on both the Screen UI and the admin panel.
 - [ ] Heat dissipation options? 
 - [ ] Try this on a simpler board without a screen. Could make it a bit more rugged.
+- [ ] media.py?
