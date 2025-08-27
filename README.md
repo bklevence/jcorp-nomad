@@ -93,7 +93,7 @@ favicon.ico
 ```
  
 > [!TIP]
-> I am not the original dev, best to go to the original[JCorp Nomad repository](https://github.com/Jstudner/jcorp-nomad/issues) or the [Waveshare ESP32-S3-LCD-1.47B wiki](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B) first.
+> I am not the original dev, best to go to the original [JCorp Nomad repository](https://github.com/Jstudner/jcorp-nomad/issues) or the [Waveshare ESP32-S3-LCD-1.47B wiki](https://www.waveshare.com/wiki/ESP32-S3-LCD-1.47B) first.
 
 ## Troubleshooting
 
@@ -101,16 +101,17 @@ favicon.ico
 |-------|----------|-------|-----|
 | **SD Card Errors** | Crashes after connect, random reboots, read errors, SD LED off | Not FAT32, bad/cheap card, overheating | Format FAT32 ([tool](https://fat32format.com)), check serial logs, test card, thermal pad may help, unplug/replug if looped |
 | **Wi-Fi Issues** | No redirect, blank screen, “no wifi”, WiFi LED off | Captive portal quirks, missing HTML files, device-specific bugs | Check serial (`WiFi Online`), ensure `index.html` + `appleindex.html`, tweak firmware for certain phones |
-| **Video Seek Fails** | Video plays but can’t skip, hangs/reloads | ESP32 poor at handling byte range requests | Check serial logs, reincode videos, if controls break = other issue, still WIP. |
+| **Video Seek Fails** | Video plays but can’t skip, hangs/reloads | ESP32 poor at handling byte range requests | Check serial logs, re-encode videos, if controls break = other issue, still WIP. |
 | **Screen Glitches** | Screen off, distorted/vanishing UI | Damaged screen, corrupted GUI export | Check firmware/connection (LED on), **check USB Power Supply**, re-export GUI , replace if cracked |
 
 ## Repo Structure
 
-- [/firmware](/firmware) – Literally just Arduino (see .ino file) firmware for ESP32-S3, I will probably spin this into the ardiuno folder as a sketch at some point, for now it's nice to have so I can see deltas between repos.
+- [/firmware](/firmware) – Literally just Arduino (see .ino file) firmware for ESP32-S3, I have also placed it under [Arduino/sketches](/Arduino/sketches/) for clarity, keeping for now as it's nice to have so I can see deltas between repos.
     - [/firmware/JcorpNomadProject/JcorpNomadProject.ino](/firmware/JcorpNomadProject/JcorpNomadProject.ino) - Wi-Fi name and password can be changed here
 - [/SD_Card_Template](/SD_Card_Template/) – Web UI, HTML files, and [/SD_Card_Template/media.json](/SD_Card_Template/media.json). 
     - [/SD_Card_Template/menu.html](/SD_Card_Template/menu.html) - Branding (logo, favicon) can be replaced in here. Sections (Movies, Music, etc.) can be removed from here.
 - [/Arduino/libraries/](/Arduino/libraries/) – arduino libraries I needed to get this off the ground. This was a zip as a release on main branch. 
+- [/Arduino/sketches/](/Arduino/sketches/) – I have copied the Arduino project into here to make copying everything to your Arduino folder easier. 
 
 ## WIP Status
 
