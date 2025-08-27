@@ -28,7 +28,7 @@ Stream movies, music, books, and shows anywhere — no internet required.</p>
 
 ## Quick Start
 
-1. Flash the ESP32-S3 with the firmware in the `/firmware/` and utilize `/libraries/` directories using Arduino IDE.
+1. Using Arduino IDE, flash the ESP32-S3 with the project under `/Arduino/sketches` or in the `/firmware/` folder, make sure `/Arduino/libraries/` are also installed in your Arduino IDE.
     - Tapping Boot and then RST twice usually gets it ready for flashing if you're uploading code again.
         - This may change your COM port moments before uploading the code
     - Arduino Board Flash Settings under Tools menu:
